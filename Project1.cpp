@@ -1,7 +1,7 @@
 //==============================================================================
-// 3D-сцена от третьего лица в стиле GTA — OpenGL 3.3 Core, C++ Builder
-// ЛКМ — захват мыши, WASD/стрелки — ходьба, Shift — бег, Пробел — прыжок,
-// колесо мыши — зум камеры, Esc — отпустить мышь
+// 3D-СЃС†РµРЅР° РѕС‚ С‚СЂРµС‚СЊРµРіРѕ Р»РёС†Р° РІ СЃС‚РёР»Рµ GTA вЂ” OpenGL 3.3 Core, C++ Builder
+// Р›РљРњ вЂ” Р·Р°С…РІР°С‚ РјС‹С€Рё, WASD/СЃС‚СЂРµР»РєРё вЂ” С…РѕРґСЊР±Р°, Shift вЂ” Р±РµРі, РџСЂРѕР±РµР» вЂ” РїСЂС‹Р¶РѕРє,
+// РєРѕР»РµСЃРѕ РјС‹С€Рё вЂ” Р·СѓРј РєР°РјРµСЂС‹, Esc вЂ” РѕС‚РїСѓСЃС‚РёС‚СЊ РјС‹С€СЊ
 //==============================================================================
 #define NOMINMAX
 #include <windows.h>
@@ -13,7 +13,7 @@
 #pragma comment(lib, "opengl32.lib")
 
 //==============================================================================
-// 1. МИНИМАЛЬНЫЕ ОПРЕДЕЛЕНИЯ OPENGL (чтобы не тянуть GLAD/GLEW)
+// 1. РњРРќРРњРђР›Р¬РќР«Р• РћРџР Р•Р”Р•Р›Р•РќРРЇ OPENGL (С‡С‚РѕР±С‹ РЅРµ С‚СЏРЅСѓС‚СЊ GLAD/GLEW)
 //==============================================================================
 typedef unsigned int GLenum;  typedef unsigned char GLboolean;
 typedef unsigned int GLbitfield; typedef int GLint;   typedef int GLsizei;
@@ -23,7 +23,7 @@ typedef unsigned char GLubyte; typedef unsigned char GLbyte;
 typedef unsigned short GLushort; typedef short GLshort;
 typedef ptrdiff_t GLsizeiptr; typedef ptrdiff_t GLintptr;
 static struct { GLint sunNDC,size; } UOcc;
-static float g_sunVis=1.0f, g_sunVisTarget=1.0f;   // видимость солнца 0..1
+static float g_sunVis=1.0f, g_sunVisTarget=1.0f;   // ГўГЁГ¤ГЁГ¬Г®Г±ГІГј Г±Г®Г«Г­Г¶Г  0..1
 static bool g_occOK=false;
 #define GL_FALSE 0
 #define GL_TRUE  1
@@ -55,7 +55,7 @@ enum : unsigned {
     GL_FRAMEBUFFER_COMPLETE=0x8CD5
 };
 
-// Функции GL 1.1 — импортируются напрямую из opengl32.dll
+// Р¤СѓРЅРєС†РёРё GL 1.1 вЂ” РёРјРїРѕСЂС‚РёСЂСѓСЋС‚СЃСЏ РЅР°РїСЂСЏРјСѓСЋ РёР· opengl32.dll
 extern "C" {
 __declspec(dllimport) void APIENTRY glColorMask(GLboolean,GLboolean,GLboolean,GLboolean);
 __declspec(dllimport) void APIENTRY glBlendFunc(GLenum,GLenum);
@@ -80,7 +80,7 @@ __declspec(dllimport) BOOL  APIENTRY wglMakeCurrent(HDC,HGLRC);
 __declspec(dllimport) PROC  APIENTRY wglGetProcAddress(LPCSTR);
 }
 
-// Современные функции — загружаются через wglGetProcAddress
+// РЎРѕРІСЂРµРјРµРЅРЅС‹Рµ С„СѓРЅРєС†РёРё вЂ” Р·Р°РіСЂСѓР¶Р°СЋС‚СЃСЏ С‡РµСЂРµР· wglGetProcAddress
 static GLuint (APIENTRY *glCreateShader)(GLenum);
 static void   (APIENTRY *glDeleteShader)(GLuint);
 static void   (APIENTRY *glShaderSource)(GLuint,GLsizei,const GLchar* const*,const GLint*);
@@ -150,7 +150,7 @@ static void LoadGL()
 }
 
 //==============================================================================
-// 2. МАТЕМАТИКА
+// 2. ГЊГЂГ’Г…ГЊГЂГ’Г€ГЉГЂ
 //==============================================================================
 const float PI = 3.14159265358979f;
 
@@ -174,7 +174,7 @@ static float smoothstepf(float a,float b,float x){
     float t=(x-a)/(b-a); t=t<0?0:(t>1?1:t); return t*t*(3-2*t);
 }
 
-// Матрица 4x4, column-major (как в OpenGL)
+// ГЊГ ГІГ°ГЁГ¶Г  4x4, column-major (ГЄГ ГЄ Гў OpenGL)
 struct Mat4 {
     float m[16];
     Mat4(){ memset(m,0,sizeof(m)); }
@@ -214,7 +214,7 @@ static Mat4 lookAt(const Vec3&eye,const Vec3&target,const Vec3&up){
     r.m[12]=-dot(s,eye); r.m[13]=-dot(u,eye); r.m[14]=dot(f,eye);
     return r;
 }
-static Mat4 inverse(const Mat4& mm)   // универсальная (Mesa-style)
+static Mat4 inverse(const Mat4& mm)   // ГіГ­ГЁГўГҐГ°Г±Г Г«ГјГ­Г Гї (Mesa-style)
 {
     const float* a=mm.m; float inv[16];
     inv[0]= a[5]*(a[10]*a[15]-a[11]*a[14])-a[9]*(a[6]*a[15]-a[7]*a[14])+a[13]*(a[6]*a[11]-a[7]*a[10]);
@@ -252,7 +252,7 @@ static Vec4 xform(const Mat4& m,const Vec3& p){
 }
 
 //==============================================================================
-// 3. ГЕОМЕТРИЯ (процедурная)
+// 3. ГѓГ…ГЋГЊГ…Г’ГђГ€Гџ (ГЇГ°Г®Г¶ГҐГ¤ГіГ°Г­Г Гї)
 //==============================================================================
 struct Mesh {
     std::vector<float> v;      // pos.xyz + normal.xyz
@@ -314,7 +314,7 @@ static Mesh MakeCylinder(int seg)
         m.idx.push_back(a); m.idx.push_back(b); m.idx.push_back(a+1);
         m.idx.push_back(a+1); m.idx.push_back(b); m.idx.push_back(b+1);
     }
-    for (int i=0;i<2;i++){   // крышки
+    for (int i=0;i<2;i++){   // ГЄГ°Г»ГёГЄГЁ
         float y=i?0.5f:-0.5f, ny=i?1.0f:-1.0f;
         GLuint c0=(GLuint)(m.v.size()/6); Push(m.v,Vec3(0,y,0),Vec3(0,ny,0));
         GLuint r0=(GLuint)(m.v.size()/6);
@@ -399,7 +399,7 @@ static void DrawMesh(const Mesh& m)
 }
 
 //==============================================================================
-// 4. ШЕЙДЕРЫ
+// 4. ГГ…Г‰Г„Г…ГђГ›
 //==============================================================================
 static const char* VS_MAIN = R"glsl(
 #version 330 core
@@ -478,7 +478,7 @@ void main(){
     float ndlK = max(dot(N, uKeyDir), 0.0);
     float ndlF = max(dot(N, uFillDir), 0.0);
     float sh = ShadowFactor();
-    // ---- движущиеся тени облаков ----
+    // ---- Г¤ГўГЁГ¦ГіГ№ГЁГҐГ±Гї ГІГҐГ­ГЁ Г®ГЎГ«Г ГЄГ®Гў ----
     float cloudSh = 1.0;
     if (uCloudSh > 0.001){
         vec2 cp = vWorld.xz + uSunXZY*(90.0 - vWorld.y) + uCloudOff;
@@ -489,14 +489,14 @@ void main(){
     vec3 dayAmb   = mix(vec3(0.15,0.18,0.14), vec3(0.33,0.40,0.52), hemi);
     vec3 nightAmb = mix(vec3(0.020,0.028,0.050), vec3(0.045,0.060,0.100), hemi);
     vec3 amb = mix(nightAmb, dayAmb, uDayF);
-    amb = mix(amb, vec3(0.30,0.19,0.13), uDuskF*0.45);            // тёплый воздух в сумерки
+    amb = mix(amb, vec3(0.30,0.19,0.13), uDuskF*0.45);            // ГІВёГЇГ«Г»Г© ГўГ®Г§Г¤ГіГµ Гў Г±ГіГ¬ГҐГ°ГЄГЁ
     vec3 col = base * (amb + uKeyCol*ndlK*sh*cloudSh + uFillCol*ndlF);
-    col = mix(col, col*vec3(1.18,0.80,0.58), uDuskF*0.50);        // закатная окраска сцены
+    col = mix(col, col*vec3(1.18,0.80,0.58), uDuskF*0.50);        // Г§Г ГЄГ ГІГ­Г Гї Г®ГЄГ°Г Г±ГЄГ  Г±Г¶ГҐГ­Г»
     float dist = length(vWorld - uCamPos);
     col = mix(col, uFogCol, clamp(1.0-exp(-dist*dist*0.000020), 0.0, 1.0));
-    col *= 1.0 - uOvercast*0.16*uDayF;                            // облачность приглушает
+    col *= 1.0 - uOvercast*0.16*uDayF;                            // Г®ГЎГ«Г Г·Г­Г®Г±ГІГј ГЇГ°ГЁГЈГ«ГіГёГ ГҐГІ
     float luma = dot(col, vec3(0.299,0.587,0.114));
-    col = mix(col, vec3(luma), uOvercast*0.22*uDayF);             // снижение контраста/насыщенности
+    col = mix(col, vec3(luma), uOvercast*0.22*uDayF);             // Г±Г­ГЁГ¦ГҐГ­ГЁГҐ ГЄГ®Г­ГІГ°Г Г±ГІГ /Г­Г Г±Г»Г№ГҐГ­Г­Г®Г±ГІГЁ
     outColor = vec4(col, 1.0);
 })glsl";
 
@@ -519,7 +519,7 @@ float WaveH(vec2 p,float t){
 void main(){
     vec4 wp=uModel*vec4(aPos,1.0);
     float edge=1.0-smoothstep(uLakeR-3.0,uLakeR,length(wp.xz-uLakeC));
-    wp.y+=WaveH(wp.xz,uTime)*edge;      // волны затухают у берега
+    wp.y+=WaveH(wp.xz,uTime)*edge;      // ГўГ®Г«Г­Г» Г§Г ГІГіГµГ ГѕГІ Гі ГЎГҐГ°ГҐГЈГ 
     vWorld=wp.xyz;
     vLightSpace=uLightVP*wp;
     gl_Position=uProj*uView*wp;
@@ -556,7 +556,7 @@ float ShadowFactor(){
     return mix(1.0,s/9.0,fade);
 }
 void main(){
-    float e=0.22;                                       // нормаль из волн
+    float e=0.22;                                       // Г­Г®Г°Г¬Г Г«Гј ГЁГ§ ГўГ®Г«Г­
     float hL=WaveH(vWorld.xz-vec2(e,0.0),uTime);
     float hR=WaveH(vWorld.xz+vec2(e,0.0),uTime);
     float hD=WaveH(vWorld.xz-vec2(0.0,e),uTime);
@@ -566,15 +566,15 @@ void main(){
     vec3 R=reflect(-V,N);
     float fres=0.02+0.98*pow(1.0-max(dot(N,V),0.0),5.0);
     vec3 zen=mix(vec3(0.010,0.015,0.040),vec3(0.11,0.31,0.66),uDayF);
-    vec3 sky=(R.y>=0.0)?mix(uFogCol,zen,pow(R.y,0.6)):uFogCol;   // отражение неба
+    vec3 sky=(R.y>=0.0)?mix(uFogCol,zen,pow(R.y,0.6)):uFogCol;   // Г®ГІГ°Г Г¦ГҐГ­ГЁГҐ Г­ГҐГЎГ 
     float sh=ShadowFactor();
-    float sd=max(dot(R,uKeyDir),0.0);                   // дорожка солнца/луны
+    float sd=max(dot(R,uKeyDir),0.0);                   // Г¤Г®Г°Г®Г¦ГЄГ  Г±Г®Г«Г­Г¶Г /Г«ГіГ­Г»
     float spec=pow(sd,200.0)*2.5+pow(sd,24.0)*0.10;
     vec3 deep=mix(vec3(0.008,0.012,0.020),vec3(0.02,0.11,0.14),uDayF);
     float dl=length(vWorld.xz-uLakeC);
     float edge=1.0-smoothstep(uLakeR-2.5,uLakeR,dl);
     float shore=1.0-smoothstep(uLakeR-6.0,uLakeR,dl);
-    vec3 waterBase=mix(deep,vec3(0.10,0.20,0.18),(1.0-shore)*0.65); // мелководье
+    vec3 waterBase=mix(deep,vec3(0.10,0.20,0.18),(1.0-shore)*0.65); // Г¬ГҐГ«ГЄГ®ГўГ®Г¤ГјГҐ
     vec3 col=mix(waterBase,sky,fres)+uKeyCol*spec*sh;
     float alpha=(0.42+0.52*fres)*mix(0.55,1.0,shore)*edge;
     outColor=vec4(col,clamp(alpha,0.0,0.95));
@@ -651,28 +651,28 @@ void main(){
     float m=max(dot(d,uMoonDir),0.0);
     col+=vec3(0.85,0.90,1.00)*pow(m,2000.0)*2.0*(1.0-dayF);
     col+=vec3(0.35,0.45,0.70)*pow(m,8.0)*0.10*(1.0-dayF);
-    // ==== Облака: два слоя + фейковый объём ====
+    // ==== ГЋГЎГ«Г ГЄГ : Г¤ГўГ  Г±Г«Г®Гї + ГґГҐГ©ГЄГ®ГўГ»Г© Г®ГЎГєВёГ¬ ====
     float cloudA=0.0;
     if (h>0.015){
         float invY=1.0/max(d.y,0.03);
-        // --- слой 1: основной, высота 90 м ---
+        // --- Г±Г«Г®Г© 1: Г®Г±Г­Г®ГўГ­Г®Г©, ГўГ»Г±Г®ГІГ  90 Г¬ ---
         vec2 cuv=uCamPos.xz+d.xz*invY*90.0+vec2(uTime*1.6,uTime*0.5);
         float sc=0.006;
         float cov=fbm(cuv*sc)+0.18*fbm(cuv*sc*2.7+vec2(5.2,1.3));
         float cl=smoothstep(0.52,0.74,cov)*smoothstep(0.015,0.14,h);
         vec3 cloudCol=vec3(0.0);
         if (cl>0.001){
-            float covS=fbm((cuv+shd.xz*9.0)*sc);          // плотность в сторону солнца
-            float grad=cov-covS;                       // градиент = псевдо-нормаль
+            float covS=fbm((cuv+shd.xz*9.0)*sc);          // ГЇГ«Г®ГІГ­Г®Г±ГІГј Гў Г±ГІГ®Г°Г®Г­Гі Г±Г®Г«Г­Г¶Г 
+            float grad=cov-covS;                       // ГЈГ°Г Г¤ГЁГҐГ­ГІ = ГЇГ±ГҐГўГ¤Г®-Г­Г®Г°Г¬Г Г«Гј
             float lit=clamp(0.55+grad*2.2,0.0,1.0)*(0.30+0.70*dayF);
-            float edgeGlow=(1.0-smoothstep(0.56,0.74,cov))*0.55;  // светлые тонкие края
+            float edgeGlow=(1.0-smoothstep(0.56,0.74,cov))*0.55;  // Г±ГўГҐГІГ«Г»ГҐ ГІГ®Г­ГЄГЁГҐ ГЄГ°Г Гї
             vec3 bright=mix(vec3(0.10,0.11,0.16), vec3(1.02,1.02,1.04), dayF);
             vec3 dark  =mix(vec3(0.030,0.035,0.060), vec3(0.52,0.54,0.60), dayF);
             cloudCol=mix(dark,bright,lit)+bright*edgeGlow*0.6;
             cloudCol=mix(cloudCol, vec3(1.15,0.55,0.30), dusk*(0.30+0.60*sunGlow)*(0.35+0.65*lit));
-            cloudCol+=sunTint*pow(s,16.0)*0.8*dayF;    // серебряная кайма
+            cloudCol+=sunTint*pow(s,16.0)*0.8*dayF;    // Г±ГҐГ°ГҐГЎГ°ГїГ­Г Гї ГЄГ Г©Г¬Г 
         }
-        // --- слой 2: высокий и редкий, 150 м ---
+        // --- Г±Г«Г®Г© 2: ГўГ»Г±Г®ГЄГЁГ© ГЁ Г°ГҐГ¤ГЄГЁГ©, 150 Г¬ ---
         vec2 cuv2=uCamPos.xz+d.xz*invY*150.0+vec2(uTime*2.3,uTime*0.7);
         float cov2=fbm(cuv2*0.0035+vec2(9.7,3.1));
         float cl2=smoothstep(0.56,0.76,cov2)*smoothstep(0.02,0.18,h)*0.45;
@@ -719,10 +719,10 @@ void main(){ gl_Position = vec4(aPos, 0.9999, 1.0); })glsl";
 
 static const char* FS_DIM = R"glsl(
 #version 330 core
-uniform float uDim;          // 0 = нет затемнения, 1 = максимальное
+uniform float uDim;          // 0 = Г­ГҐГІ Г§Г ГІГҐГ¬Г­ГҐГ­ГЁГї, 1 = Г¬Г ГЄГ±ГЁГ¬Г Г«ГјГ­Г®ГҐ
 out vec4 outColor;
 void main(){
-    float b = 1.0 - uDim*0.65;           // сцена гаснет до ~35% яркости
+    float b = 1.0 - uDim*0.65;           // Г±Г¶ГҐГ­Г  ГЈГ Г±Г­ГҐГІ Г¤Г® ~35% ГїГ°ГЄГ®Г±ГІГЁ
     outColor = vec4(b, b, b, 1.0);
 })glsl";
 
@@ -736,7 +736,7 @@ static GLuint CompileShader(GLenum type,const char* src)
     GLint ok=0; glGetShaderiv(s,GL_COMPILE_STATUS,&ok);
     if (!ok){
         char log[2048]=""; glGetShaderInfoLog(s,sizeof(log),NULL,log);
-        char buf[2300]; sprintf(buf,"Ошибка шейдера:\n%s",log);
+        char buf[2300]; sprintf(buf,"ГЋГёГЁГЎГЄГ  ГёГҐГ©Г¤ГҐГ°Г :\n%s",log);
         MessageBoxA(NULL,buf,"GLSL",MB_ICONERROR);
     }
     return s;
@@ -750,7 +750,7 @@ static GLuint LinkProgram(const char* vs,const char* fs)
     GLint ok=0; glGetProgramiv(p,GL_LINK_STATUS,&ok);
     if (!ok){
         char log[2048]=""; glGetProgramInfoLog(p,sizeof(log),NULL,log);
-        char buf[2300]; sprintf(buf,"Ошибка линковки:\n%s",log);
+        char buf[2300]; sprintf(buf,"ГЋГёГЁГЎГЄГ  Г«ГЁГ­ГЄГ®ГўГЄГЁ:\n%s",log);
         MessageBoxA(NULL,buf,"GLSL",MB_ICONERROR);
         return 0;
     }
@@ -759,7 +759,7 @@ static GLuint LinkProgram(const char* vs,const char* fs)
 }
 
 //==============================================================================
-// 5. СОСТОЯНИЕ СЦЕНЫ
+// 5. Г‘ГЋГ‘Г’ГЋГџГЌГ€Г… Г‘Г–Г…ГЌГ›
 //==============================================================================
 struct Prop {
     Mesh* mesh; Mat4 model; Vec3 color; bool casts; int pattern;
@@ -780,7 +780,7 @@ static std::vector<Part> g_charParts;
 static Player ch = { Vec3(0,0,0), 0.0f, Vec3(0,0,0), 0.0f, true, 0.0f };
 static Vec3 g_sunDir, g_camPos, g_camTarget;
 
-static float g_timeOfDay=0.32f, g_dayLength=240.0f;   // 240 сек на полные сутки
+static float g_timeOfDay=0.32f, g_dayLength=240.0f;   // 240 Г±ГҐГЄ Г­Г  ГЇГ®Г«Г­Г»ГҐ Г±ГіГІГЄГЁ
 static float g_time=0.0f;
 static float g_dayF=1.0f, g_duskF=0.0f;
 static Vec3 g_moonDir(0,-1,0), g_keyDir(0,1,0), g_keyCol(1,1,1);
@@ -793,7 +793,7 @@ static float g_camYaw=0.0f, g_camPitch=0.35f, g_camDist=6.0f;
 
 static GLuint progMain,progSky,progShadow;
 //static GLuint progGlare;
-static float g_adapt=0.0f;   // накопленная засветка (адаптация глаз)
+static float g_adapt=0.0f;   // Г­Г ГЄГ®ГЇГ«ГҐГ­Г­Г Гї Г§Г Г±ГўГҐГІГЄГ  (Г Г¤Г ГЇГІГ Г¶ГЁГї ГЈГ«Г Г§)
 static GLuint progGlare, progDim;
 static struct { GLint sunUV,intensity,aspect; } UG;
 static struct { GLint dim; } UDim;
@@ -816,7 +816,7 @@ static void BuildWorld()
 {
     g_props.clear(); g_props.reserve(256);
     g_props.push_back(Prop(&g_plane, scaleM(Vec3(420,1,420)), Vec3(0.3f,0.5f,0.25f), false, 1));
-    for (int i=0;i<46;i++){                                  // деревья
+    for (int i=0;i<46;i++){                                  // Г¤ГҐГ°ГҐГўГјГї
         float a=Rnd()*2*PI, r=12.0f+Rnd()*80.0f;
 		float x=cosf(a)*r, z=sinf(a)*r, h=2.4f+Rnd()*1.6f, tr=0.18f+Rnd()*0.08f;
 
@@ -834,19 +834,19 @@ static void BuildWorld()
             g_props.push_back(Prop(&g_sphere, translate(Vec3(x,h+cr*0.7f,z))*scaleM(Vec3(cr,cr*0.9f,cr)), leaf, true, 0));
         }
     }
-    for (int i=0;i<24;i++){                                  // камни
+    for (int i=0;i<24;i++){                                  // ГЄГ Г¬Г­ГЁ
         float a=Rnd()*2*PI, r=8.0f+Rnd()*88.0f;
         float x=cosf(a)*r, z=sinf(a)*r;
         float sx=0.35f+Rnd()*0.9f, sy=0.25f+Rnd()*0.5f, sz=0.35f+Rnd()*0.9f;
         float g=0.38f+Rnd()*0.15f;
         g_props.push_back(Prop(&g_sphere, translate(Vec3(x,sy*0.8f,z))*rotY(Rnd()*6.28f)*scaleM(Vec3(sx,sy,sz)), Vec3(g,g+0.01f,g+0.02f), true, 0));
     }
-    for (int i=0;i<36;i++){                                  // кусты
+    for (int i=0;i<36;i++){                                  // ГЄГіГ±ГІГ»
         float a=Rnd()*2*PI, r=6.0f+Rnd()*88.0f;
         float x=cosf(a)*r, z=sinf(a)*r, s=0.35f+Rnd()*0.45f;
         g_props.push_back(Prop(&g_sphere, translate(Vec3(x,s*0.7f,z))*scaleM(Vec3(s,s*0.8f,s)), Vec3(0.13f+Rnd()*0.06f,0.32f+Rnd()*0.1f,0.12f), true, 0));
     }
-    for (int i=0;i<6;i++){                                   // ящики
+    for (int i=0;i<6;i++){                                   // ГїГ№ГЁГЄГЁ
         float x=2.5f+Rnd()*3.0f, z=-4.0f+Rnd()*3.0f, s=0.7f+Rnd()*0.5f;
         g_props.push_back(Prop(&g_cube, translate(Vec3(x,s*0.5f,z))*rotY(Rnd()*1.5f)*scaleM(Vec3(s,s,s)), Vec3(0.55f,0.40f,0.22f), true, 0));
     }
@@ -859,10 +859,10 @@ static void BuildCharacterParts()
     float amp=len(ch.vel)/3.6f; if (amp>1.0f) amp=1.0f;
     float sw=sinf(ch.phase)*0.8f*amp;
     float lsw=sw, rsw=-sw, lasw=-sw, rasw=sw;
-    if (!ch.grounded){ lsw=-0.45f; rsw=0.55f; lasw=-2.5f; rasw=-2.3f; } // поза прыжка
+    if (!ch.grounded){ lsw=-0.45f; rsw=0.55f; lasw=-2.5f; rasw=-2.3f; } // ГЇГ®Г§Г  ГЇГ°Г»Г¦ГЄГ 
     Vec3 shirt(0.72f,0.20f,0.18f), pants(0.16f,0.22f,0.38f), skin(0.93f,0.75f,0.60f);
-    g_charParts.push_back(Part(base*translate(Vec3(0,1.07f,0))*scaleM(Vec3(0.55f,0.72f,0.30f)), shirt)); // торс
-    g_charParts.push_back(Part(base*translate(Vec3(0,1.66f,0))*scaleM(Vec3(0.30f,0.32f,0.30f)), skin));  // голова
+    g_charParts.push_back(Part(base*translate(Vec3(0,1.07f,0))*scaleM(Vec3(0.55f,0.72f,0.30f)), shirt)); // ГІГ®Г°Г±
+    g_charParts.push_back(Part(base*translate(Vec3(0,1.66f,0))*scaleM(Vec3(0.30f,0.32f,0.30f)), skin));  // ГЈГ®Г«Г®ГўГ 
     g_charParts.push_back(Part(base*translate(Vec3(-0.15f,0.95f,0))*rotX(lsw)*translate(Vec3(0,-0.45f,0))*scaleM(Vec3(0.20f,0.90f,0.24f)), pants));
     g_charParts.push_back(Part(base*translate(Vec3( 0.15f,0.95f,0))*rotX(rsw)*translate(Vec3(0,-0.45f,0))*scaleM(Vec3(0.20f,0.90f,0.24f)), pants));
     g_charParts.push_back(Part(base*translate(Vec3(-0.37f,1.40f,0))*rotX(lasw)*translate(Vec3(0,-0.28f,0))*scaleM(Vec3(0.16f,0.58f,0.18f)), shirt));
@@ -870,7 +870,7 @@ static void BuildCharacterParts()
 }
 
 //==============================================================================
-// 6. ИНИЦИАЛИЗАЦИЯ КОНТЕКСТА (WGL, core profile 3.3 + MSAA)
+// 6. Г€ГЌГ€Г–Г€ГЂГ‹Г€Г‡ГЂГ–Г€Гџ ГЉГЋГЌГ’Г…ГЉГ‘Г’ГЂ (WGL, core profile 3.3 + MSAA)
 //==============================================================================
 typedef BOOL  (WINAPI *PFNWGLCHOOSEPIXELFORMATARB)(HDC,const int*,const FLOAT*,UINT,int*,UINT*);
 typedef HGLRC (WINAPI *PFNWGLCREATECONTEXTATTRIBSARB)(HDC,HGLRC,const int*);
@@ -889,7 +889,7 @@ enum { WGL_DRAW_TO_WINDOW_ARB=0x2001, WGL_SUPPORT_OPENGL_ARB=0x2010,
 static bool InitGL(HWND hwnd)
 {
     g_hdc = GetDC(hwnd);
-    // временное окно и legacy-контекст, чтобы загрузить wgl-расширения
+    // ГўГ°ГҐГ¬ГҐГ­Г­Г®ГҐ Г®ГЄГ­Г® ГЁ legacy-ГЄГ®Г­ГІГҐГЄГ±ГІ, Г·ГІГ®ГЎГ» Г§Г ГЈГ°ГіГ§ГЁГІГј wgl-Г°Г Г±ГёГЁГ°ГҐГ­ГЁГї
     WNDCLASSA wc={}; wc.lpfnWndProc=DefWindowProcA;
     wc.hInstance=GetModuleHandleA(NULL); wc.lpszClassName="GLDummy";
     RegisterClassA(&wc);
@@ -929,7 +929,7 @@ static bool InitGL(HWND hwnd)
         if (!f || !SetPixelFormat(g_hdc,f,&pfd)){
             wglMakeCurrent(NULL,NULL); wglDeleteContext(tmpRC);
             ReleaseDC(dummy,ddc); DestroyWindow(dummy);
-            MessageBoxA(NULL,"Не найден подходящий формат пикселей.","Ошибка",MB_ICONERROR);
+            MessageBoxA(NULL,"ГЌГҐ Г­Г Г©Г¤ГҐГ­ ГЇГ®Г¤ГµГ®Г¤ГїГ№ГЁГ© ГґГ®Г°Г¬Г ГІ ГЇГЁГЄГ±ГҐГ«ГҐГ©.","ГЋГёГЁГЎГЄГ ",MB_ICONERROR);
             return false;
         }
     }
@@ -942,8 +942,8 @@ static bool InitGL(HWND hwnd)
     ReleaseDC(dummy,ddc); DestroyWindow(dummy);
     UnregisterClassA("GLDummy",GetModuleHandleA(NULL));
     if (!g_hrc){
-        MessageBoxA(NULL,"Драйвер не поддерживает OpenGL 3.3 Core. Обновите драйвер видеокарты.",
-                    "Ошибка",MB_ICONERROR);
+        MessageBoxA(NULL,"Г„Г°Г Г©ГўГҐГ° Г­ГҐ ГЇГ®Г¤Г¤ГҐГ°Г¦ГЁГўГ ГҐГІ OpenGL 3.3 Core. ГЋГЎГ­Г®ГўГЁГІГҐ Г¤Г°Г Г©ГўГҐГ° ГўГЁГ¤ГҐГ®ГЄГ Г°ГІГ».",
+                    "ГЋГёГЁГЎГЄГ ",MB_ICONERROR);
         return false;
     }
     wglMakeCurrent(g_hdc,g_hrc);
@@ -955,7 +955,7 @@ static bool InitGL(HWND hwnd)
 }
 
 //==============================================================================
-// 7. СОЗДАНИЕ СЦЕНЫ
+// 7. Г‘ГЋГ‡Г„ГЂГЌГ€Г… Г‘Г–Г…ГЌГ›
 //==============================================================================
 static bool InitScene()
 {
@@ -1029,14 +1029,14 @@ static bool InitScene()
     g_cone=MakeCone(20);      Upload(g_cone);
     g_plane=MakePlane();      Upload(g_plane);
 
-    float sv[6]={-1,-1, 3,-1, -1,3};                    // полноэкранный треугольник неба
+    float sv[6]={-1,-1, 3,-1, -1,3};                    // ГЇГ®Г«Г­Г®ГЅГЄГ°Г Г­Г­Г»Г© ГІГ°ГҐГіГЈГ®Г«ГјГ­ГЁГЄ Г­ГҐГЎГ 
     glGenVertexArrays(1,&g_skyVAO); glBindVertexArray(g_skyVAO);
     glGenBuffers(1,&g_skyVBO); glBindBuffer(GL_ARRAY_BUFFER,g_skyVBO);
     glBufferData(GL_ARRAY_BUFFER,sizeof(sv),sv,GL_STATIC_DRAW);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,8,(void*)0);
     glEnableVertexAttribArray(0); glBindVertexArray(0);
 
-    glGenTextures(1,&g_shadowTex); glBindTexture(GL_TEXTURE_2D,g_shadowTex); // карта теней
+    glGenTextures(1,&g_shadowTex); glBindTexture(GL_TEXTURE_2D,g_shadowTex); // ГЄГ Г°ГІГ  ГІГҐГ­ГҐГ©
     glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT24,SHADOW_RES,SHADOW_RES,0,
                  GL_DEPTH_COMPONENT,GL_UNSIGNED_INT,NULL);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
@@ -1051,7 +1051,7 @@ static bool InitScene()
     glFramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_TEXTURE_2D,g_shadowTex,0);
     glDrawBuffer(GL_NONE); glReadBuffer(GL_NONE);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE)
-        MessageBoxA(NULL,"Shadow FBO не собран","Ошибка",MB_ICONERROR);
+        MessageBoxA(NULL,"Shadow FBO Г­ГҐ Г±Г®ГЎГ°Г Г­","ГЋГёГЁГЎГЄГ ",MB_ICONERROR);
     glBindFramebuffer(GL_FRAMEBUFFER,0);
 
 	BuildWorld();
@@ -1065,7 +1065,7 @@ static bool InitScene()
 }
 
 //==============================================================================
-// 8. ВВОД И ЛОГИКА (управление как в GTA)
+// 8. Г‚Г‚ГЋГ„ Г€ Г‹ГЋГѓГ€ГЉГЂ (ГіГЇГ°Г ГўГ«ГҐГ­ГЁГҐ ГЄГ ГЄ Гў GTA)
 //==============================================================================
 static void LockMouse(){ if (!g_mouseLocked){ g_mouseLocked=true; while (ShowCursor(FALSE)>=0); } }
 static void UnlockMouse(){ if (g_mouseLocked){ g_mouseLocked=false; while (ShowCursor(TRUE)<0); } }
@@ -1080,9 +1080,9 @@ static void UnlockMouse(){ if (g_mouseLocked){ g_mouseLocked=false; while (ShowC
 		float t=-b-s; if (t<0.0f) t=-b+s;
 		return t>0.0f;
 	}
-	// Точное пересечение луча с конусом (ель): вершина apex, центр основания baseC, радиус r, высота h
+	// Г’Г®Г·Г­Г®ГҐ ГЇГҐГ°ГҐГ±ГҐГ·ГҐГ­ГЁГҐ Г«ГіГ·Г  Г± ГЄГ®Г­ГіГ±Г®Г¬ (ГҐГ«Гј): ГўГҐГ°ГёГЁГ­Г  apex, Г¶ГҐГ­ГІГ° Г®Г±Г­Г®ГўГ Г­ГЁГї baseC, Г°Г Г¤ГЁГіГ± r, ГўГ»Г±Г®ГІГ  h
 static bool RayConeHit(const Vec3& ro,const Vec3& rd,const Vec3& baseC,float r,float h,const Vec3& apex){
-    float apexY=baseC.y+h;                          // истинная высота вершины
+    float apexY=baseC.y+h;                          // ГЁГ±ГІГЁГ­Г­Г Гї ГўГ»Г±Г®ГІГ  ГўГҐГ°ГёГЁГ­Г»
     float tCap=(apexY-ro.y)/rd.y;
     if (tCap>0.0f){
         float px=ro.x+rd.x*tCap-baseC.x, pz=ro.z+rd.z*tCap-baseC.z;
@@ -1110,7 +1110,7 @@ static bool RayConeHit(const Vec3& ro,const Vec3& rd,const Vec3& baseC,float r,f
     }
     return false;
 }
-	// Луч в AABB (ящики)
+	// Г‹ГіГ· Гў AABB (ГїГ№ГЁГЄГЁ)
 	static bool RayBoxHit(const Vec3& ro,const Vec3& rd,const Vec3& mn,const Vec3& mx){
 		float tmin=-1e30f, tmax=1e30f;
 		float o[3]={ro.x,ro.y,ro.z}, d[3]={rd.x,rd.y,rd.z};
@@ -1150,8 +1150,8 @@ static bool RayConeHit(const Vec3& ro,const Vec3& rd,const Vec3& baseC,float r,f
 			Vec3 c; float r;
 			PropSphere(g_props[i],c,r);
 			if (r<=0.001f) continue;
-			if (!RaySphereHit(ro,rd,c,r*1.05f)) continue;   // грубый отсев по сфере
-			if (g_props[i].mesh==&g_cone){                   // ель — точный тест конуса
+			if (!RaySphereHit(ro,rd,c,r*1.05f)) continue;   // ГЈГ°ГіГЎГ»Г© Г®ГІГ±ГҐГў ГЇГ® Г±ГґГҐГ°ГҐ
+			if (g_props[i].mesh==&g_cone){                   // ГҐГ«Гј вЂ” ГІГ®Г·Г­Г»Г© ГІГҐГ±ГІ ГЄГ®Г­ГіГ±Г 
 				float cr=(sqrtf(g_props[i].model.m[0]*g_props[i].model.m[0]+g_props[i].model.m[1]*g_props[i].model.m[1]+g_props[i].model.m[2]*g_props[i].model.m[2])
 						 +sqrtf(g_props[i].model.m[8]*g_props[i].model.m[8]+g_props[i].model.m[9]*g_props[i].model.m[9]+g_props[i].model.m[10]*g_props[i].model.m[10]))*0.5f;
 				float hh=sqrtf(g_props[i].model.m[4]*g_props[i].model.m[4]+g_props[i].model.m[5]*g_props[i].model.m[5]+g_props[i].model.m[6]*g_props[i].model.m[6]);
@@ -1164,7 +1164,7 @@ static bool RayConeHit(const Vec3& ro,const Vec3& rd,const Vec3& baseC,float r,f
 				float sz=sqrtf(g_props[i].model.m[8]*g_props[i].model.m[8]+g_props[i].model.m[9]*g_props[i].model.m[9]+g_props[i].model.m[10]*g_props[i].model.m[10]);
 				if (RayBoxHit(ro,rd,c-Vec3(sx,sy,sz)*0.5f,c+Vec3(sx,sy,sz)*0.5f)) return 0.0f;
 			} else {
-				return 0.0f;                                 // дубы/камни/кусты — сфера и есть форма
+				return 0.0f;                                 // Г¤ГіГЎГ»/ГЄГ Г¬Г­ГЁ/ГЄГіГ±ГІГ» вЂ” Г±ГґГҐГ°Г  ГЁ ГҐГ±ГІГј ГґГ®Г°Г¬Г 
 			}
 		}
 		return 1.0f;
@@ -1202,7 +1202,7 @@ static void Update(float dt)
 {
 	//g_timeOfDay=0.35f;
 
-	if (g_mouseLocked){                                  // вращение камеры мышью
+	if (g_mouseLocked){                                  // ГўГ°Г Г№ГҐГ­ГЁГҐ ГЄГ Г¬ГҐГ°Г» Г¬Г»ГёГјГѕ
 		RECT rc; GetClientRect(g_hwnd,&rc);
 		POINT c; c.x=(rc.right-rc.left)/2; c.y=(rc.bottom-rc.top)/2;
 		ClientToScreen(g_hwnd,&c);
@@ -1211,10 +1211,10 @@ static void Update(float dt)
 		if (dx||dy) SetCursorPos(c.x,c.y);
 		g_camYaw   -= dx*0.0032f;
 	g_camPitch += dy*0.0030f;
-	if (g_camPitch<-1.30f) g_camPitch=-1.30f;   // вверх — теперь можно задрать высоко
-	if (g_camPitch> 1.30f) g_camPitch= 1.30f;   // вниз
+	if (g_camPitch<-1.30f) g_camPitch=-1.30f;   // ГўГўГҐГ°Гµ вЂ” ГІГҐГЇГҐГ°Гј Г¬Г®Г¦Г­Г® Г§Г Г¤Г°Г ГІГј ГўГ»Г±Г®ГЄГ®
+	if (g_camPitch> 1.30f) g_camPitch= 1.30f;   // ГўГ­ГЁГ§
 	}
-    Vec3 fwd=norm(Vec3(sinf(g_camYaw),0,cosf(g_camYaw)));  // движение относительно камеры
+    Vec3 fwd=norm(Vec3(sinf(g_camYaw),0,cosf(g_camYaw)));  // Г¤ГўГЁГ¦ГҐГ­ГЁГҐ Г®ГІГ­Г®Г±ГЁГІГҐГ«ГјГ­Г® ГЄГ Г¬ГҐГ°Г»
     Vec3 rgt=cross(fwd,Vec3(0,1,0));
     Vec3 wish(0,0,0);
     if (g_keys['W']||g_keys[VK_UP])    wish=wish+fwd;
@@ -1236,11 +1236,11 @@ static void Update(float dt)
         ch.vy-=18.0f*dt; ch.pos.y+=ch.vy*dt;
         if (ch.pos.y<=0.0f){ ch.pos.y=0.0f; ch.vy=0.0f; ch.grounded=true; }
     }
-	// Персонаж смотрит в сторону взгляда камеры (за мышью)
+	// ГЏГҐГ°Г±Г®Г­Г Г¦ Г±Г¬Г®ГІГ°ГЁГІ Гў Г±ГІГ®Г°Г®Г­Гі ГўГ§ГЈГ«ГїГ¤Г  ГЄГ Г¬ГҐГ°Г» (Г§Г  Г¬Г»ГёГјГѕ)
 float spd2=len(ch.vel);
 float want;
-if (spd2>0.4f) want=atan2f(ch.vel.x,ch.vel.z);   // в движении — по курсу
-else           want=g_camYaw;                     // на месте — за мышью
+if (spd2>0.4f) want=atan2f(ch.vel.x,ch.vel.z);   // Гў Г¤ГўГЁГ¦ГҐГ­ГЁГЁ вЂ” ГЇГ® ГЄГіГ°Г±Гі
+else           want=g_camYaw;                     // Г­Г  Г¬ГҐГ±ГІГҐ вЂ” Г§Г  Г¬Г»ГёГјГѕ
 float d=want-ch.yaw;
 while (d>PI) d-=2*PI;
 while (d<-PI) d+=2*PI;
@@ -1251,57 +1251,57 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 	if (ch.pos.x> 190.0f) ch.pos.x= 190.0f; if (ch.pos.x<-190.0f) ch.pos.x=-190.0f;
     if (ch.pos.z> 190.0f) ch.pos.z= 190.0f; if (ch.pos.z<-190.0f) ch.pos.z=-190.0f;
 
-// Динамическая дистанция камеры (как в GTA)
+// Г„ГЁГ­Г Г¬ГЁГ·ГҐГ±ГЄГ Гї Г¤ГЁГ±ГІГ Г­Г¶ГЁГї ГЄГ Г¬ГҐГ°Г» (ГЄГ ГЄ Гў GTA)
 	float baseDist = g_camDist;
 	float pitchFactor = 1.0f;
 	if (g_camPitch > 0.0f) {
-		// При взгляде вверх уменьшаем дистанцию (до 40% при максимальном наклоне)
-		pitchFactor = 1.0f - (g_camPitch / 1.30f) * 0.75f;  // до 25% дистанции
+		// ГЏГ°ГЁ ГўГ§ГЈГ«ГїГ¤ГҐ ГўГўГҐГ°Гµ ГіГ¬ГҐГ­ГјГёГ ГҐГ¬ Г¤ГЁГ±ГІГ Г­Г¶ГЁГѕ (Г¤Г® 40% ГЇГ°ГЁ Г¬Г ГЄГ±ГЁГ¬Г Г«ГјГ­Г®Г¬ Г­Г ГЄГ«Г®Г­ГҐ)
+		pitchFactor = 1.0f - (g_camPitch / 1.30f) * 0.75f;  // Г¤Г® 25% Г¤ГЁГ±ГІГ Г­Г¶ГЁГЁ
 	}
 	float effectiveDist = baseDist * pitchFactor;
 
-	// Вычисляем позицию камеры
-	// ---- Камера от 3-го лица (стиль GTA, с коллизией о землю) ----
+	// Г‚Г»Г·ГЁГ±Г«ГїГҐГ¬ ГЇГ®Г§ГЁГ¶ГЁГѕ ГЄГ Г¬ГҐГ°Г»
+	// ---- ГЉГ Г¬ГҐГ°Г  Г®ГІ 3-ГЈГ® Г«ГЁГ¶Г  (Г±ГІГЁГ«Гј GTA, Г± ГЄГ®Г«Г«ГЁГ§ГЁГҐГ© Г® Г§ГҐГ¬Г«Гѕ) ----
 	float cp=cosf(g_camPitch), sp=sinf(g_camPitch);
-	Vec3 dir(cp*sinf(g_camYaw), -sp, cp*cosf(g_camYaw));   // направление от камеры к цели
+	Vec3 dir(cp*sinf(g_camYaw), -sp, cp*cosf(g_camYaw));   // Г­Г ГЇГ°Г ГўГ«ГҐГ­ГЁГҐ Г®ГІ ГЄГ Г¬ГҐГ°Г» ГЄ Г¶ГҐГ«ГЁ
 	g_camTarget=ch.pos+Vec3(0,1.5f,0);
 
 	Vec3 camPos=g_camTarget-dir*g_camDist;
 
-	// Камера не должна уходить под землю: укорачиваем луч до точки касания
+	// ГЉГ Г¬ГҐГ°Г  Г­ГҐ Г¤Г®Г«Г¦Г­Г  ГіГµГ®Г¤ГЁГІГј ГЇГ®Г¤ Г§ГҐГ¬Г«Гѕ: ГіГЄГ®Г°Г Г·ГЁГўГ ГҐГ¬ Г«ГіГ· Г¤Г® ГІГ®Г·ГЄГЁ ГЄГ Г±Г Г­ГЁГї
 	const float minCamHeight=0.3f;
 	if (camPos.y < minCamHeight && dir.y>0.0001f){
-		float t=(g_camTarget.y-minCamHeight)/dir.y;        // дистанция до касания земли
+		float t=(g_camTarget.y-minCamHeight)/dir.y;        // Г¤ГЁГ±ГІГ Г­Г¶ГЁГї Г¤Г® ГЄГ Г±Г Г­ГЁГї Г§ГҐГ¬Г«ГЁ
 		if (t>0.5f && t<g_camDist) camPos=g_camTarget-dir*t;
 	}
-	if (camPos.y<minCamHeight) camPos.y=minCamHeight;      // страховка
+	if (camPos.y<minCamHeight) camPos.y=minCamHeight;      // Г±ГІГ°Г ГµГ®ГўГЄГ 
 	g_camPos=camPos;
 
-		// ---- Цикл дня и ночи ----
+		// ---- Г–ГЁГЄГ« Г¤Г­Гї ГЁ Г­Г®Г·ГЁ ----
 	g_time+=dt;
 	g_timeOfDay+=dt/g_dayLength;
-	if (g_keys['M']) g_timeOfDay+=dt*0.03f;   // M — перемотка вперёд
-	if (g_keys['N']) g_timeOfDay-=dt*0.03f;   // N — назад
+	if (g_keys['M']) g_timeOfDay+=dt*0.03f;   // M вЂ” ГЇГҐГ°ГҐГ¬Г®ГІГЄГ  ГўГЇГҐГ°ВёГ¤
+	if (g_keys['N']) g_timeOfDay-=dt*0.03f;   // N вЂ” Г­Г Г§Г Г¤
 	if (g_timeOfDay>=1.0f) g_timeOfDay-=1.0f;
 	if (g_timeOfDay<0.0f)  g_timeOfDay+=1.0f;
-	float dayAng=(g_timeOfDay-0.25f)*2.0f*PI;             // 0.25 — рассвет, 0.5 — полдень
+	float dayAng=(g_timeOfDay-0.25f)*2.0f*PI;             // 0.25 вЂ” Г°Г Г±Г±ГўГҐГІ, 0.5 вЂ” ГЇГ®Г«Г¤ГҐГ­Гј
 	g_sunDir=norm(Vec3(cosf(dayAng)*0.75f, sinf(dayAng), 0.35f));
 	g_moonDir=norm(Vec3(-g_sunDir.x, -g_sunDir.y*0.9f, -g_sunDir.z));
 	g_dayF=smoothstepf(-0.10f,0.20f,g_sunDir.y);
-	g_duskF = 1.0f - smoothstepf(0.0f, 0.45f, fabsf(g_sunDir.y));  // шире и плавнее
+	g_duskF = 1.0f - smoothstepf(0.0f, 0.45f, fabsf(g_sunDir.y));  // ГёГЁГ°ГҐ ГЁ ГЇГ«Г ГўГ­ГҐГҐ
 	float warm=g_sunDir.y*2.0f; warm=warm<0?0:(warm>1?1:warm);
-	Vec3 sunCol=lerpv(Vec3(1.00f,0.50f,0.22f), Vec3(1.05f,0.96f,0.84f), warm); // оранжевое на рассвете
+	Vec3 sunCol=lerpv(Vec3(1.00f,0.50f,0.22f), Vec3(1.05f,0.96f,0.84f), warm); // Г®Г°Г Г­Г¦ГҐГўГ®ГҐ Г­Г  Г°Г Г±Г±ГўГҐГІГҐ
 	float sunI=1.30f*g_dayF;
 	Vec3 moonCol(0.55f,0.65f,0.95f);
-	float moonI=0.42f*(1.0f-g_dayF);    // луна сильнее — ночные тени видны
+	float moonI=0.42f*(1.0f-g_dayF);    // Г«ГіГ­Г  Г±ГЁГ«ГјГ­ГҐГҐ вЂ” Г­Г®Г·Г­Г»ГҐ ГІГҐГ­ГЁ ГўГЁГ¤Г­Г»
 	if (sunI>moonI){ g_keyDir=g_sunDir; g_keyCol=sunCol*sunI; g_fillDir=g_moonDir; g_fillCol=moonCol*moonI; }
 	else           { g_keyDir=g_moonDir; g_keyCol=moonCol*moonI; g_fillDir=g_sunDir; g_fillCol=sunCol*sunI; }
 	g_fogCol=lerpv(Vec3(0.030f,0.045f,0.090f), Vec3(0.72f,0.83f,0.96f), g_dayF);
     g_fogCol = lerpv(g_fogCol, Vec3(0.95f,0.50f,0.30f), g_duskF*0.55f);
 	g_fogCol=g_fogCol+Vec3(1.0f,0.42f,0.15f)*(g_duskF*0.25f);
-														// Адаптация глаз к яркому свету
-	// Плавная видимость солнца (результат окклюзии с прошлой кадра)
-    // ---- Облака: влияние на ослепление, тени и контраст ----
+														// ГЂГ¤Г ГЇГІГ Г¶ГЁГї ГЈГ«Г Г§ ГЄ ГїГ°ГЄГ®Г¬Гі Г±ГўГҐГІГі
+	// ГЏГ«Г ГўГ­Г Гї ГўГЁГ¤ГЁГ¬Г®Г±ГІГј Г±Г®Г«Г­Г¶Г  (Г°ГҐГ§ГіГ«ГјГІГ ГІ Г®ГЄГЄГ«ГѕГ§ГЁГЁ Г± ГЇГ°Г®ГёГ«Г®Г© ГЄГ Г¤Г°Г )
+    // ---- ГЋГЎГ«Г ГЄГ : ГўГ«ГЁГїГ­ГЁГҐ Г­Г  Г®Г±Г«ГҐГЇГ«ГҐГ­ГЁГҐ, ГІГҐГ­ГЁ ГЁ ГЄГ®Г­ГІГ°Г Г±ГІ ----
 	float covOver=CloudCover(ch.pos.x,ch.pos.z,1.0f);
 	g_overcastU+=(covOver-g_overcastU)*(1.0f-expf(-dt*2.0f));
 	float cloudSun=0.0f;
@@ -1318,7 +1318,7 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 	float target=0.0f;
 	if (align>0.50f) target=(align-0.50f)/0.50f;
 	target=target*target*target;
-	target*=g_sunVis*g_dayF*(1.0f-cloudSun*0.9f);   // облака гасят ослепление    // ночью солнце не слепит                                  // адаптация только когда солнце видно
+	target*=g_sunVis*g_dayF*(1.0f-cloudSun*0.9f);   // Г®ГЎГ«Г ГЄГ  ГЈГ Г±ГїГІ Г®Г±Г«ГҐГЇГ«ГҐГ­ГЁГҐ    // Г­Г®Г·ГјГѕ Г±Г®Г«Г­Г¶ГҐ Г­ГҐ Г±Г«ГҐГЇГЁГІ                                  // Г Г¤Г ГЇГІГ Г¶ГЁГї ГІГ®Г«ГјГЄГ® ГЄГ®ГЈГ¤Г  Г±Г®Г«Г­Г¶ГҐ ГўГЁГ¤Г­Г®
 	if (target>g_adapt) g_adapt+=(target-g_adapt)*(1.0f-expf(-dt*6.0f));
 	else                g_adapt+=(target-g_adapt)*(1.0f-expf(-dt*0.6f));
 
@@ -1326,18 +1326,18 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 }
 
 //==============================================================================
-// 9. РЕНДЕРИНГ: pass теней -> небо -> сцена
+// 9. ГђГ…ГЌГ„Г…ГђГ€ГЌГѓ: pass ГІГҐГ­ГҐГ© -> Г­ГҐГЎГ® -> Г±Г¶ГҐГ­Г 
 //==============================================================================
 static void Render()
 {
 	Vec3 center=ch.pos+Vec3(0,1.2f,0);
-	Vec3 eye=center+g_keyDir*55.0f;   // камера света на стороне солнца
+	Vec3 eye=center+g_keyDir*55.0f;   // ГЄГ Г¬ГҐГ°Г  Г±ГўГҐГІГ  Г­Г  Г±ГІГ®Г°Г®Г­ГҐ Г±Г®Г«Г­Г¶Г 
 	Mat4 lightVP=orthoP(-26,26,-26,26,10,110)*lookAt(eye,center,Vec3(0,1,0));
 
-    // --- pass 1: карта глубины со стороны солнца ---
+    // --- pass 1: ГЄГ Г°ГІГ  ГЈГ«ГіГЎГЁГ­Г» Г±Г® Г±ГІГ®Г°Г®Г­Г» Г±Г®Г«Г­Г¶Г  ---
 	glBindFramebuffer(GL_FRAMEBUFFER,g_shadowFBO);
     glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D,0);   // отвязываем shadow-текстуру перед записью в неё
+	glBindTexture(GL_TEXTURE_2D,0);   // Г®ГІГўГїГ§Г»ГўГ ГҐГ¬ shadow-ГІГҐГЄГ±ГІГіГ°Гі ГЇГҐГ°ГҐГ¤ Г§Г ГЇГЁГ±ГјГѕ Гў Г­ГҐВё
     glViewport(0,0,SHADOW_RES,SHADOW_RES);
     glClear(GL_DEPTH_BUFFER_BIT);
     glUseProgram(progShadow);
@@ -1354,14 +1354,14 @@ static void Render()
     }
     glCullFace(GL_BACK);
 
-    // --- pass 2: основная сцена ---
+    // --- pass 2: Г®Г±Г­Г®ГўГ­Г Гї Г±Г¶ГҐГ­Г  ---
     glBindFramebuffer(GL_FRAMEBUFFER,0);
     glViewport(0,0,g_w,g_h);
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
     Mat4 proj=perspective(60.0f*PI/180.0f,(float)g_w/(float)g_h,0.1f,600.0f);
     Mat4 view=lookAt(g_camPos,g_camTarget,Vec3(0,1,0));
 
-	glUseProgram(progSky);                                // градиентное небо
+	glUseProgram(progSky);                                // ГЈГ°Г Г¤ГЁГҐГ­ГІГ­Г®ГҐ Г­ГҐГЎГ®
     glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
 	Mat4 invVP=inverse(proj*view);
     glUniformMatrix4fv(US.invVP,1,GL_FALSE,invVP.m);
@@ -1378,7 +1378,7 @@ static void Render()
     glBindVertexArray(g_skyVAO); glDrawArrays(GL_TRIANGLES,0,3); glBindVertexArray(0);
     glDepthMask(GL_TRUE); glEnable(GL_DEPTH_TEST);
 
-	glUseProgram(progMain);                               // объекты и персонаж
+	glUseProgram(progMain);                               // Г®ГЎГєГҐГЄГІГ» ГЁ ГЇГҐГ°Г±Г®Г­Г Г¦
     glUniformMatrix4fv(U.view,1,GL_FALSE,view.m);
     glUniformMatrix4fv(U.proj,1,GL_FALSE,proj.m);
     glUniformMatrix4fv(U.lightVP,1,GL_FALSE,lightVP.m);
@@ -1415,7 +1415,7 @@ static void Render()
         DrawMesh(g_cube);
 	}
 
-		// ---- Вода ----
+		// ---- Г‚Г®Г¤Г  ----
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 	glDepthMask(GL_FALSE);
@@ -1438,29 +1438,29 @@ static void Render()
 	glDepthMask(GL_TRUE);
 	glDisable(GL_BLEND);
 
-													 // ---- Ослепление солнцем ----
-	// ---- Адаптация к яркому свету (зрачок сужается => темнее) ----
+													 // ---- ГЋГ±Г«ГҐГЇГ«ГҐГ­ГЁГҐ Г±Г®Г«Г­Г¶ГҐГ¬ ----
+	// ---- ГЂГ¤Г ГЇГІГ Г¶ГЁГї ГЄ ГїГ°ГЄГ®Г¬Гі Г±ГўГҐГІГі (Г§Г°Г Г·Г®ГЄ Г±ГіГ¦Г ГҐГІГ±Гї => ГІГҐГ¬Г­ГҐГҐ) ----
 	if (g_adapt>0.001f){
 		glDisable(GL_DEPTH_TEST);
 		glDepthMask(GL_FALSE);
 		glEnable(GL_BLEND);
 
-		// 1) Затемнение всей сцены (умножение)
+		// 1) Г‡Г ГІГҐГ¬Г­ГҐГ­ГЁГҐ ГўГ±ГҐГ© Г±Г¶ГҐГ­Г» (ГіГ¬Г­Г®Г¦ГҐГ­ГЁГҐ)
 		glUseProgram(progDim);
 		glUniform1f(UDim.dim,g_adapt);
-		glBlendFunc(GL_DST_COLOR,GL_ZERO);              // dst = src * dst  => темнее
+		glBlendFunc(GL_DST_COLOR,GL_ZERO);              // dst = src * dst  => ГІГҐГ¬Г­ГҐГҐ
 		glBindVertexArray(g_skyVAO); glDrawArrays(GL_TRIANGLES,0,3); glBindVertexArray(0);
 
-		// 2) Яркое солнце поверх (аддитивно)
+		// 2) ГџГ°ГЄГ®ГҐ Г±Г®Г«Г­Г¶ГҐ ГЇГ®ГўГҐГ°Гµ (Г Г¤Г¤ГЁГІГЁГўГ­Г®)
 		Vec4 sc=xform(proj*view, g_camPos+g_sunDir*100.0f);
 		if (sc.w>0.001f){
 			float sunU=(sc.x/sc.w)*0.5f+0.5f;
 			float sunV=(sc.y/sc.w)*0.5f+0.5f;
 			glUseProgram(progGlare);
 			glUniform2f(UG.sunUV,sunU,sunV);
-			glUniform1f(UG.intensity,g_adapt*g_sunVis);   // блик гаснет, когда солнце за объектом
+			glUniform1f(UG.intensity,g_adapt*g_sunVis);   // ГЎГ«ГЁГЄ ГЈГ Г±Г­ГҐГІ, ГЄГ®ГЈГ¤Г  Г±Г®Г«Г­Г¶ГҐ Г§Г  Г®ГЎГєГҐГЄГІГ®Г¬
 			glUniform1f(UG.aspect,(float)g_w/(float)g_h);
-			glBlendFunc(GL_ONE,GL_ONE);                 // dst = dst + src  => ярче
+			glBlendFunc(GL_ONE,GL_ONE);                 // dst = dst + src  => ГїГ°Г·ГҐ
 			glBindVertexArray(g_skyVAO); glDrawArrays(GL_TRIANGLES,0,3); glBindVertexArray(0);
 		}
 
@@ -1471,7 +1471,7 @@ static void Render()
 }
 
 //==============================================================================
-// 10. ОКНО И ГЛАВНЫЙ ЦИКЛ
+// 10. ГЋГЉГЌГЋ Г€ ГѓГ‹ГЂГ‚ГЌГ›Г‰ Г–Г€ГЉГ‹
 //==============================================================================
 static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l)
 {
@@ -1507,7 +1507,7 @@ int WINAPI wWinMain(HINSTANCE hInst,HINSTANCE,LPWSTR,int nCmdShow)
     RegisterClassA(&wc);
     RECT rc={0,0,1280,720};
     AdjustWindowRect(&rc,WS_OVERLAPPEDWINDOW,FALSE);
-    g_hwnd=CreateWindowA("GtaGLScene","Загрузка...",WS_OVERLAPPEDWINDOW,
+    g_hwnd=CreateWindowA("GtaGLScene","Г‡Г ГЈГ°ГіГ§ГЄГ ...",WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,CW_USEDEFAULT,rc.right-rc.left,rc.bottom-rc.top,NULL,NULL,hInst,NULL);
     if (!g_hwnd) return 1;
     ShowWindow(g_hwnd,nCmdShow); UpdateWindow(g_hwnd);
@@ -1534,7 +1534,7 @@ int WINAPI wWinMain(HINSTANCE hInst,HINSTANCE,LPWSTR,int nCmdShow)
         acc+=dt;
         if (acc>=1.0f){
             int hh=(int)(g_timeOfDay*24.0f), mm=(int)((g_timeOfDay*24.0f-hh)*60.0f);
-				sprintf(title,"OpenGL 3.3 | %.60s | FPS %d | %02d:%02d | WASD - ходьба, Shift - бег, Пробел - прыжок | ЛКМ - мышь, Esc - отпустить | M/N - время",
+				sprintf(title,"OpenGL 3.3 | %.60s | FPS %d | %02d:%02d | WASD - ГµГ®Г¤ГјГЎГ , Shift - ГЎГҐГЈ, ГЏГ°Г®ГЎГҐГ« - ГЇГ°Г»Г¦Г®ГЄ | Г‹ГЉГЊ - Г¬Г»ГёГј, Esc - Г®ГІГЇГіГ±ГІГЁГІГј | M/N - ГўГ°ГҐГ¬Гї",
 		g_renderer,(int)(frames/acc),hh,mm);
             SetWindowTextA(g_hwnd,title);
             frames=0; acc=0;
