@@ -478,7 +478,7 @@ void main(){
     float ndlK = max(dot(N, uKeyDir), 0.0);
     float ndlF = max(dot(N, uFillDir), 0.0);
     float sh = ShadowFactor();
-    // ---- äâèæóùèåñÿ òåíè îáëàêîâ ----
+    // ---- движущиеся тени облаков ----
     float cloudSh = 1.0;
     if (uCloudSh > 0.001){
         vec2 cp = vWorld.xz + uSunXZY*(90.0 - vWorld.y) + uCloudOff;
@@ -489,14 +489,14 @@ void main(){
     vec3 dayAmb   = mix(vec3(0.15,0.18,0.14), vec3(0.33,0.40,0.52), hemi);
     vec3 nightAmb = mix(vec3(0.020,0.028,0.050), vec3(0.045,0.060,0.100), hemi);
     vec3 amb = mix(nightAmb, dayAmb, uDayF);
-    amb = mix(amb, vec3(0.30,0.19,0.13), uDuskF*0.45);            // ò¸ïëûé âîçäóõ â ñóìåðêè
+    amb = mix(amb, vec3(0.30,0.19,0.13), uDuskF*0.45);            // тёплый воздух в сумерки
     vec3 col = base * (amb + uKeyCol*ndlK*sh*cloudSh + uFillCol*ndlF);
-    col = mix(col, col*vec3(1.18,0.80,0.58), uDuskF*0.50);        // çàêàòíàÿ îêðàñêà ñöåíû
+    col = mix(col, col*vec3(1.18,0.80,0.58), uDuskF*0.50);        // закатная окраска сцены
     float dist = length(vWorld - uCamPos);
     col = mix(col, uFogCol, clamp(1.0-exp(-dist*dist*0.000020), 0.0, 1.0));
-    col *= 1.0 - uOvercast*0.16*uDayF;                            // îáëà÷íîñòü ïðèãëóøàåò
+    col *= 1.0 - uOvercast*0.16*uDayF;                            // облачность приглушает
     float luma = dot(col, vec3(0.299,0.587,0.114));
-    col = mix(col, vec3(luma), uOvercast*0.22*uDayF);             // ñíèæåíèå êîíòðàñòà/íàñûùåííîñòè
+    col = mix(col, vec3(luma), uOvercast*0.22*uDayF);             // снижение контраста/насыщенности
     outColor = vec4(col, 1.0);
 })glsl";
 
@@ -519,7 +519,7 @@ float WaveH(vec2 p,float t){
 void main(){
     vec4 wp=uModel*vec4(aPos,1.0);
     float edge=1.0-smoothstep(uLakeR-3.0,uLakeR,length(wp.xz-uLakeC));
-    wp.y+=WaveH(wp.xz,uTime)*edge;      // âîëíû çàòóõàþò ó áåðåãà
+    wp.y+=WaveH(wp.xz,uTime)*edge;      // волны затухают у берега
     vWorld=wp.xyz;
     vLightSpace=uLightVP*wp;
     gl_Position=uProj*uView*wp;
@@ -556,7 +556,7 @@ float ShadowFactor(){
     return mix(1.0,s/9.0,fade);
 }
 void main(){
-    float e=0.22;                                       // íîðìàëü èç âîëí
+    float e=0.22;                                       // нормаль из волн
     float hL=WaveH(vWorld.xz-vec2(e,0.0),uTime);
     float hR=WaveH(vWorld.xz+vec2(e,0.0),uTime);
     float hD=WaveH(vWorld.xz-vec2(0.0,e),uTime);
@@ -566,15 +566,15 @@ void main(){
     vec3 R=reflect(-V,N);
     float fres=0.02+0.98*pow(1.0-max(dot(N,V),0.0),5.0);
     vec3 zen=mix(vec3(0.010,0.015,0.040),vec3(0.11,0.31,0.66),uDayF);
-    vec3 sky=(R.y>=0.0)?mix(uFogCol,zen,pow(R.y,0.6)):uFogCol;   // îòðàæåíèå íåáà
+    vec3 sky=(R.y>=0.0)?mix(uFogCol,zen,pow(R.y,0.6)):uFogCol;   // отражение неба
     float sh=ShadowFactor();
-    float sd=max(dot(R,uKeyDir),0.0);                   // äîðîæêà ñîëíöà/ëóíû
+    float sd=max(dot(R,uKeyDir),0.0);                   // дорожка солнца/луны
     float spec=pow(sd,200.0)*2.5+pow(sd,24.0)*0.10;
     vec3 deep=mix(vec3(0.008,0.012,0.020),vec3(0.02,0.11,0.14),uDayF);
     float dl=length(vWorld.xz-uLakeC);
     float edge=1.0-smoothstep(uLakeR-2.5,uLakeR,dl);
     float shore=1.0-smoothstep(uLakeR-6.0,uLakeR,dl);
-    vec3 waterBase=mix(deep,vec3(0.10,0.20,0.18),(1.0-shore)*0.65); // ìåëêîâîäüå
+    vec3 waterBase=mix(deep,vec3(0.10,0.20,0.18),(1.0-shore)*0.65); // мелководье
     vec3 col=mix(waterBase,sky,fres)+uKeyCol*spec*sh;
     float alpha=(0.42+0.52*fres)*mix(0.55,1.0,shore)*edge;
     outColor=vec4(col,clamp(alpha,0.0,0.95));
@@ -651,11 +651,11 @@ void main(){
     float m=max(dot(d,uMoonDir),0.0);
     col+=vec3(0.85,0.90,1.00)*pow(m,2000.0)*2.0*(1.0-dayF);
     col+=vec3(0.35,0.45,0.70)*pow(m,8.0)*0.10*(1.0-dayF);
-    // ==== Îáëàêà: äâà ñëîÿ + ôåéêîâûé îáú¸ì ====
+    // ==== Облака: два слоя + фейковый объём ====
     float cloudA=0.0;
     if (h>0.015){
         float invY=1.0/max(d.y,0.03);
-        // --- ñëîé 1: îñíîâíîé, âûñîòà 90 ì ---
+        // --- слой 1: основной, высота 90 м ---
         vec2 cuv=uCamPos.xz+d.xz*invY*90.0+vec2(uTime*1.6,uTime*0.5);
         float sc=0.006;
         float cov=fbm(cuv*sc)+0.18*fbm(cuv*sc*2.7+vec2(5.2,1.3));
