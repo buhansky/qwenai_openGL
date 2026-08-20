@@ -1401,22 +1401,26 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 
 			// ---- Цикл дня и ночи ----
 	g_time += dt;
-	//основное мировое время в сутках
-	g_timeOfDay += dt / g_dayLength;
 
-	// Облака движутся синхронно с перемоткой времени
+	g_timeDays += dt / g_dayLength;
 	g_cloudTime += dt;
-	if (g_keys['M']) {
-		g_timeOfDay += dt * 0.03f;
+
+	if (g_keys['M'])
+	{
+		g_timeDays += dt * 0.03f;
 		g_cloudTime += dt * 0.03f * g_dayLength;
 	}
-	if (g_keys['N']) {
-		g_timeOfDay -= dt * 0.03f;
+
+	if (g_keys['N'])
+	{
+		g_timeDays -= dt * 0.03f;
 		g_cloudTime -= dt * 0.03f * g_dayLength;
 	}
 
-	// g_timeOfDay остаётся только для интерфейса и солнца
-	g_timeOfDay = g_timeDays - floorf(g_timeDays);
+	g_timeOfDay = g_timeDays;
+
+	while (g_timeOfDay >= 1.0f) g_timeOfDay -= 1.0f;
+	while (g_timeOfDay < 0.0f) g_timeOfDay += 1.0f;
 	if (g_timeOfDay < 0.0f) g_timeOfDay += 1.0f;
 	// Солнце: астрономически привязано к времени суток
 	// 0.25 = 06:00 восход
