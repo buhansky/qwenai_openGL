@@ -479,25 +479,40 @@ void main(){
     float ndlF = max(dot(N, uFillDir), 0.0);
     float sh = ShadowFactor();
     // ---- движущиеся тени облаков ----
-    float cloudSh = 1.0;
-    if (uCloudSh > 0.001){
-        vec2 cp = vWorld.xz + uSunXZY*(90.0 - vWorld.y) + uCloudOff;
-        float cc = fbm(cp*0.006) + 0.18*fbm(cp*0.006*2.7 + vec2(5.2,1.3));
-        cloudSh = 1.0 - smoothstep(0.52,0.74,cc)*uCloudSh;
-    }
+	float cloudSh = 1.0;
+	if (uCloudSh > 0.001)
+	{
+		vec2 cp = vWorld.xz + uSunXZY * (90.0 - vWorld.y) + uCloudOff;
+
+		float cc = fbm(cp * 0.006) + 0.18 * fbm(cp * 0.006 * 2.7 + vec2(5.2, 1.3));
+
+		float mask = smoothstep(0.50, 0.72, cc);
+
+		// Усиленные облачные тени
+		cloudSh = 1.0 - mask * uCloudSh * 1.35;
+
+		// Не даём тени стать полностью чёрной
+		cloudSh = clamp(cloudSh, 0.22, 1.0);
+	}
     float hemi = 0.5 + 0.5*N.y;
     vec3 dayAmb   = mix(vec3(0.15,0.18,0.14), vec3(0.33,0.40,0.52), hemi);
     vec3 nightAmb = mix(vec3(0.020,0.028,0.050), vec3(0.045,0.060,0.100), hemi);
-    vec3 amb = mix(nightAmb, dayAmb, uDayF);
-    amb = mix(amb, vec3(0.30,0.19,0.13), uDuskF*0.45);            // тёплый воздух в сумерки
-    vec3 col = base * (amb + uKeyCol*ndlK*sh*cloudSh + uFillCol*ndlF);
+	vec3 amb = mix(nightAmb, dayAmb, uDayF);
+	amb = mix(amb, vec3(0.30, 0.19, 0.13), uDuskF * 0.45);
+
+	// При облачности поднимаем ambient, чтобы тени стали мягче
+	amb *= 1.0 + uOvercast * 0.35 * uDayF;
+	vec3 col = base * (amb + uKeyCol*ndlK*sh*cloudSh + uFillCol*ndlF);
     col = mix(col, col*vec3(1.18,0.80,0.58), uDuskF*0.50);        // закатная окраска сцены
     float dist = length(vWorld - uCamPos);
     col = mix(col, uFogCol, clamp(1.0-exp(-dist*dist*0.000020), 0.0, 1.0));
-    col *= 1.0 - uOvercast*0.16*uDayF;                            // облачность приглушает
-    float luma = dot(col, vec3(0.299,0.587,0.114));
-    col = mix(col, vec3(luma), uOvercast*0.22*uDayF);             // снижение контраста/насыщенности
-    outColor = vec4(col, 1.0);
+	// Более заметное потемнение при облачности
+	col *= 1.0 - uOvercast * 0.26 * uDayF;
+
+	// Более сильная десатурация, чтобы погода выглядела пасмурнее
+	float luma = dot(col, vec3(0.299, 0.587, 0.114));
+	col = mix(col, vec3(luma), uOvercast * 0.38 * uDayF);
+	outColor = vec4(col, 1.0);
 })glsl";
 
 static const char* VS_WATER = R"glsl(
@@ -1302,13 +1317,31 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 														// Адаптация глаз к яркому свету
 	// Плавная видимость солнца (результат окклюзии с прошлой кадра)
     // ---- Облака: влияние на ослепление, тени и контраст ----
-	float covOver=CloudCover(ch.pos.x,ch.pos.z,1.0f);
-	g_overcastU+=(covOver-g_overcastU)*(1.0f-expf(-dt*2.0f));
-	float cloudSun=0.0f;
-	if (g_sunDir.y>0.03f)
-		cloudSun=CloudCover(g_camPos.x+g_sunDir.x/g_sunDir.y*90.0f,
-							g_camPos.z+g_sunDir.z/g_sunDir.y*90.0f, g_sunDir.y);
-	g_cloudShAmt=(g_sunDir.y>0.05f)?g_dayF*(g_sunDir.y*5.0f>1.0f?1.0f:g_sunDir.y*5.0f)*0.45f:0.0f;
+	float covOver = CloudCover(ch.pos.x, ch.pos.z, 1.0f);
+	g_overcastU += (covOver - g_overcastU) * (1.0f - expf(-dt * 2.0f));
+
+	float cloudSun = 0.0f;
+	if (g_sunDir.y > 0.03f)
+	{
+		cloudSun = CloudCover(g_camPos.x + g_sunDir.x / g_sunDir.y * 90.0f,
+							  g_camPos.z + g_sunDir.z / g_sunDir.y * 90.0f,
+							  g_sunDir.y);
+	}
+
+	float sunHeight = g_sunDir.y * 5.0f;
+	if (sunHeight < 0.0f) sunHeight = 0.0f;
+	if (sunHeight > 1.0f) sunHeight = 1.0f;
+
+	// Усиливаем облачные тени на поверхности
+	g_cloudShAmt = (g_sunDir.y > 0.05f) ? g_dayF * sunHeight * 0.95f : 0.0f;
+
+	// Новое: если облако закрывает солнце, глобально уменьшаем солнечный свет
+	float cloudDim = 1.0f - cloudSun * 0.78f * g_dayF;
+	g_keyCol = g_keyCol * cloudDim;
+	g_fillCol = g_fillCol * (1.0f - cloudSun * 0.45f * g_dayF);
+
+	if (g_overcastU < 0.0f) g_overcastU = 0.0f;
+	if (g_overcastU > 1.0f) g_overcastU = 1.0f;
 
 	g_sunVisTarget=SunVisibilityCPU();
 	g_sunVis+=(g_sunVisTarget-g_sunVis)*(1.0f-expf(-dt*10.0f));
