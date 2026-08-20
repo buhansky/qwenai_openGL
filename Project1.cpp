@@ -23,7 +23,7 @@ typedef unsigned char GLubyte; typedef unsigned char GLbyte;
 typedef unsigned short GLushort; typedef short GLshort;
 typedef ptrdiff_t GLsizeiptr; typedef ptrdiff_t GLintptr;
 static struct { GLint sunNDC,size; } UOcc;
-static float g_sunVis=1.0f, g_sunVisTarget=1.0f;   // âèäèìîñòü ñîëíöà 0..1
+static float g_sunVis=1.0f, g_sunVisTarget=1.0f;   // видимость солнца 0..1
 static bool g_occOK=false;
 #define GL_FALSE 0
 #define GL_TRUE  1
@@ -150,7 +150,7 @@ static void LoadGL()
 }
 
 //==============================================================================
-// 2. ÌÀÒÅÌÀÒÈÊÀ
+// 2. МАТЕМАТИКА
 //==============================================================================
 const float PI = 3.14159265358979f;
 
@@ -174,7 +174,7 @@ static float smoothstepf(float a,float b,float x){
     float t=(x-a)/(b-a); t=t<0?0:(t>1?1:t); return t*t*(3-2*t);
 }
 
-// Ìàòðèöà 4x4, column-major (êàê â OpenGL)
+// Матрица 4x4, column-major (как в OpenGL)
 struct Mat4 {
     float m[16];
     Mat4(){ memset(m,0,sizeof(m)); }
@@ -214,7 +214,7 @@ static Mat4 lookAt(const Vec3&eye,const Vec3&target,const Vec3&up){
     r.m[12]=-dot(s,eye); r.m[13]=-dot(u,eye); r.m[14]=dot(f,eye);
     return r;
 }
-static Mat4 inverse(const Mat4& mm)   // óíèâåðñàëüíàÿ (Mesa-style)
+static Mat4 inverse(const Mat4& mm)   // универсальная (Mesa-style)
 {
     const float* a=mm.m; float inv[16];
     inv[0]= a[5]*(a[10]*a[15]-a[11]*a[14])-a[9]*(a[6]*a[15]-a[7]*a[14])+a[13]*(a[6]*a[11]-a[7]*a[10]);
@@ -252,7 +252,7 @@ static Vec4 xform(const Mat4& m,const Vec3& p){
 }
 
 //==============================================================================
-// 3. ÃÅÎÌÅÒÐÈß (ïðîöåäóðíàÿ)
+// 3. ГЕОМЕТРИЯ (процедурная)
 //==============================================================================
 struct Mesh {
     std::vector<float> v;      // pos.xyz + normal.xyz
@@ -314,7 +314,7 @@ static Mesh MakeCylinder(int seg)
         m.idx.push_back(a); m.idx.push_back(b); m.idx.push_back(a+1);
         m.idx.push_back(a+1); m.idx.push_back(b); m.idx.push_back(b+1);
     }
-    for (int i=0;i<2;i++){   // êðûøêè
+    for (int i=0;i<2;i++){   // крышки
         float y=i?0.5f:-0.5f, ny=i?1.0f:-1.0f;
         GLuint c0=(GLuint)(m.v.size()/6); Push(m.v,Vec3(0,y,0),Vec3(0,ny,0));
         GLuint r0=(GLuint)(m.v.size()/6);
@@ -399,7 +399,7 @@ static void DrawMesh(const Mesh& m)
 }
 
 //==============================================================================
-// 4. ØÅÉÄÅÐÛ
+// 4. ШЕЙДЕРЫ
 //==============================================================================
 static const char* VS_MAIN = R"glsl(
 #version 330 core
@@ -662,17 +662,17 @@ void main(){
         float cl=smoothstep(0.52,0.74,cov)*smoothstep(0.015,0.14,h);
         vec3 cloudCol=vec3(0.0);
         if (cl>0.001){
-            float covS=fbm((cuv+shd.xz*9.0)*sc);          // ïëîòíîñòü â ñòîðîíó ñîëíöà
-            float grad=cov-covS;                       // ãðàäèåíò = ïñåâäî-íîðìàëü
+            float covS=fbm((cuv+shd.xz*9.0)*sc);          // плотность в сторону солнца
+            float grad=cov-covS;                       // градиент = псевдо-нормаль
             float lit=clamp(0.55+grad*2.2,0.0,1.0)*(0.30+0.70*dayF);
-            float edgeGlow=(1.0-smoothstep(0.56,0.74,cov))*0.55;  // ñâåòëûå òîíêèå êðàÿ
+            float edgeGlow=(1.0-smoothstep(0.56,0.74,cov))*0.55;  // светлые тонкие края
             vec3 bright=mix(vec3(0.10,0.11,0.16), vec3(1.02,1.02,1.04), dayF);
             vec3 dark  =mix(vec3(0.030,0.035,0.060), vec3(0.52,0.54,0.60), dayF);
             cloudCol=mix(dark,bright,lit)+bright*edgeGlow*0.6;
             cloudCol=mix(cloudCol, vec3(1.15,0.55,0.30), dusk*(0.30+0.60*sunGlow)*(0.35+0.65*lit));
-            cloudCol+=sunTint*pow(s,16.0)*0.8*dayF;    // ñåðåáðÿíàÿ êàéìà
+            cloudCol+=sunTint*pow(s,16.0)*0.8*dayF;    // серебряная кайма
         }
-        // --- ñëîé 2: âûñîêèé è ðåäêèé, 150 ì ---
+        // --- слой 2: высокий и редкий, 150 м ---
         vec2 cuv2=uCamPos.xz+d.xz*invY*150.0+vec2(uTime*2.3,uTime*0.7);
         float cov2=fbm(cuv2*0.0035+vec2(9.7,3.1));
         float cl2=smoothstep(0.56,0.76,cov2)*smoothstep(0.02,0.18,h)*0.45;
@@ -719,10 +719,10 @@ void main(){ gl_Position = vec4(aPos, 0.9999, 1.0); })glsl";
 
 static const char* FS_DIM = R"glsl(
 #version 330 core
-uniform float uDim;          // 0 = íåò çàòåìíåíèÿ, 1 = ìàêñèìàëüíîå
+uniform float uDim;          // 0 = нет затемнения, 1 = максимальное
 out vec4 outColor;
 void main(){
-    float b = 1.0 - uDim*0.65;           // ñöåíà ãàñíåò äî ~35% ÿðêîñòè
+    float b = 1.0 - uDim*0.65;           // сцена гаснет до ~35% яркости
     outColor = vec4(b, b, b, 1.0);
 })glsl";
 
@@ -736,7 +736,7 @@ static GLuint CompileShader(GLenum type,const char* src)
     GLint ok=0; glGetShaderiv(s,GL_COMPILE_STATUS,&ok);
     if (!ok){
         char log[2048]=""; glGetShaderInfoLog(s,sizeof(log),NULL,log);
-        char buf[2300]; sprintf(buf,"Îøèáêà øåéäåðà:\n%s",log);
+        char buf[2300]; sprintf(buf,"Ошибка шейдера:\n%s",log);
         MessageBoxA(NULL,buf,"GLSL",MB_ICONERROR);
     }
     return s;
@@ -750,7 +750,7 @@ static GLuint LinkProgram(const char* vs,const char* fs)
     GLint ok=0; glGetProgramiv(p,GL_LINK_STATUS,&ok);
     if (!ok){
         char log[2048]=""; glGetProgramInfoLog(p,sizeof(log),NULL,log);
-        char buf[2300]; sprintf(buf,"Îøèáêà ëèíêîâêè:\n%s",log);
+        char buf[2300]; sprintf(buf,"Ошибка линковки:\n%s",log);
         MessageBoxA(NULL,buf,"GLSL",MB_ICONERROR);
         return 0;
     }
@@ -759,7 +759,7 @@ static GLuint LinkProgram(const char* vs,const char* fs)
 }
 
 //==============================================================================
-// 5. ÑÎÑÒÎßÍÈÅ ÑÖÅÍÛ
+// 5. СОСТОЯНИЕ СЦЕНЫ
 //==============================================================================
 struct Prop {
     Mesh* mesh; Mat4 model; Vec3 color; bool casts; int pattern;
@@ -780,7 +780,7 @@ static std::vector<Part> g_charParts;
 static Player ch = { Vec3(0,0,0), 0.0f, Vec3(0,0,0), 0.0f, true, 0.0f };
 static Vec3 g_sunDir, g_camPos, g_camTarget;
 
-static float g_timeOfDay=0.32f, g_dayLength=240.0f;   // 240 ñåê íà ïîëíûå ñóòêè
+static float g_timeOfDay=0.32f, g_dayLength=240.0f;   // 240 сек на полные сутки
 static float g_time=0.0f;
 static float g_dayF=1.0f, g_duskF=0.0f;
 static Vec3 g_moonDir(0,-1,0), g_keyDir(0,1,0), g_keyCol(1,1,1);
@@ -793,7 +793,7 @@ static float g_camYaw=0.0f, g_camPitch=0.35f, g_camDist=6.0f;
 
 static GLuint progMain,progSky,progShadow;
 //static GLuint progGlare;
-static float g_adapt=0.0f;   // íàêîïëåííàÿ çàñâåòêà (àäàïòàöèÿ ãëàç)
+static float g_adapt=0.0f;   // накопленная засветка (адаптация глаз)
 static GLuint progGlare, progDim;
 static struct { GLint sunUV,intensity,aspect; } UG;
 static struct { GLint dim; } UDim;
@@ -816,7 +816,7 @@ static void BuildWorld()
 {
     g_props.clear(); g_props.reserve(256);
     g_props.push_back(Prop(&g_plane, scaleM(Vec3(420,1,420)), Vec3(0.3f,0.5f,0.25f), false, 1));
-    for (int i=0;i<46;i++){                                  // äåðåâüÿ
+    for (int i=0;i<46;i++){                                  // деревья
         float a=Rnd()*2*PI, r=12.0f+Rnd()*80.0f;
 		float x=cosf(a)*r, z=sinf(a)*r, h=2.4f+Rnd()*1.6f, tr=0.18f+Rnd()*0.08f;
 
@@ -834,19 +834,19 @@ static void BuildWorld()
             g_props.push_back(Prop(&g_sphere, translate(Vec3(x,h+cr*0.7f,z))*scaleM(Vec3(cr,cr*0.9f,cr)), leaf, true, 0));
         }
     }
-    for (int i=0;i<24;i++){                                  // êàìíè
+    for (int i=0;i<24;i++){                                  // камни
         float a=Rnd()*2*PI, r=8.0f+Rnd()*88.0f;
         float x=cosf(a)*r, z=sinf(a)*r;
         float sx=0.35f+Rnd()*0.9f, sy=0.25f+Rnd()*0.5f, sz=0.35f+Rnd()*0.9f;
         float g=0.38f+Rnd()*0.15f;
         g_props.push_back(Prop(&g_sphere, translate(Vec3(x,sy*0.8f,z))*rotY(Rnd()*6.28f)*scaleM(Vec3(sx,sy,sz)), Vec3(g,g+0.01f,g+0.02f), true, 0));
     }
-    for (int i=0;i<36;i++){                                  // êóñòû
+    for (int i=0;i<36;i++){                                  // кусты
         float a=Rnd()*2*PI, r=6.0f+Rnd()*88.0f;
         float x=cosf(a)*r, z=sinf(a)*r, s=0.35f+Rnd()*0.45f;
         g_props.push_back(Prop(&g_sphere, translate(Vec3(x,s*0.7f,z))*scaleM(Vec3(s,s*0.8f,s)), Vec3(0.13f+Rnd()*0.06f,0.32f+Rnd()*0.1f,0.12f), true, 0));
     }
-    for (int i=0;i<6;i++){                                   // ÿùèêè
+    for (int i=0;i<6;i++){                                   // ящики
         float x=2.5f+Rnd()*3.0f, z=-4.0f+Rnd()*3.0f, s=0.7f+Rnd()*0.5f;
         g_props.push_back(Prop(&g_cube, translate(Vec3(x,s*0.5f,z))*rotY(Rnd()*1.5f)*scaleM(Vec3(s,s,s)), Vec3(0.55f,0.40f,0.22f), true, 0));
     }
@@ -859,10 +859,10 @@ static void BuildCharacterParts()
     float amp=len(ch.vel)/3.6f; if (amp>1.0f) amp=1.0f;
     float sw=sinf(ch.phase)*0.8f*amp;
     float lsw=sw, rsw=-sw, lasw=-sw, rasw=sw;
-    if (!ch.grounded){ lsw=-0.45f; rsw=0.55f; lasw=-2.5f; rasw=-2.3f; } // ïîçà ïðûæêà
+    if (!ch.grounded){ lsw=-0.45f; rsw=0.55f; lasw=-2.5f; rasw=-2.3f; } // поза прыжка
     Vec3 shirt(0.72f,0.20f,0.18f), pants(0.16f,0.22f,0.38f), skin(0.93f,0.75f,0.60f);
-    g_charParts.push_back(Part(base*translate(Vec3(0,1.07f,0))*scaleM(Vec3(0.55f,0.72f,0.30f)), shirt)); // òîðñ
-    g_charParts.push_back(Part(base*translate(Vec3(0,1.66f,0))*scaleM(Vec3(0.30f,0.32f,0.30f)), skin));  // ãîëîâà
+    g_charParts.push_back(Part(base*translate(Vec3(0,1.07f,0))*scaleM(Vec3(0.55f,0.72f,0.30f)), shirt)); // торс
+    g_charParts.push_back(Part(base*translate(Vec3(0,1.66f,0))*scaleM(Vec3(0.30f,0.32f,0.30f)), skin));  // голова
     g_charParts.push_back(Part(base*translate(Vec3(-0.15f,0.95f,0))*rotX(lsw)*translate(Vec3(0,-0.45f,0))*scaleM(Vec3(0.20f,0.90f,0.24f)), pants));
     g_charParts.push_back(Part(base*translate(Vec3( 0.15f,0.95f,0))*rotX(rsw)*translate(Vec3(0,-0.45f,0))*scaleM(Vec3(0.20f,0.90f,0.24f)), pants));
     g_charParts.push_back(Part(base*translate(Vec3(-0.37f,1.40f,0))*rotX(lasw)*translate(Vec3(0,-0.28f,0))*scaleM(Vec3(0.16f,0.58f,0.18f)), shirt));
@@ -870,7 +870,7 @@ static void BuildCharacterParts()
 }
 
 //==============================================================================
-// 6. ÈÍÈÖÈÀËÈÇÀÖÈß ÊÎÍÒÅÊÑÒÀ (WGL, core profile 3.3 + MSAA)
+// 6. ИНИЦИАЛИЗАЦИЯ КОНТЕКСТА (WGL, core profile 3.3 + MSAA)
 //==============================================================================
 typedef BOOL  (WINAPI *PFNWGLCHOOSEPIXELFORMATARB)(HDC,const int*,const FLOAT*,UINT,int*,UINT*);
 typedef HGLRC (WINAPI *PFNWGLCREATECONTEXTATTRIBSARB)(HDC,HGLRC,const int*);
@@ -889,7 +889,7 @@ enum { WGL_DRAW_TO_WINDOW_ARB=0x2001, WGL_SUPPORT_OPENGL_ARB=0x2010,
 static bool InitGL(HWND hwnd)
 {
     g_hdc = GetDC(hwnd);
-    // âðåìåííîå îêíî è legacy-êîíòåêñò, ÷òîáû çàãðóçèòü wgl-ðàñøèðåíèÿ
+    // временное окно и legacy-контекст, чтобы загрузить wgl-расширения
     WNDCLASSA wc={}; wc.lpfnWndProc=DefWindowProcA;
     wc.hInstance=GetModuleHandleA(NULL); wc.lpszClassName="GLDummy";
     RegisterClassA(&wc);
@@ -929,7 +929,7 @@ static bool InitGL(HWND hwnd)
         if (!f || !SetPixelFormat(g_hdc,f,&pfd)){
             wglMakeCurrent(NULL,NULL); wglDeleteContext(tmpRC);
             ReleaseDC(dummy,ddc); DestroyWindow(dummy);
-            MessageBoxA(NULL,"Íå íàéäåí ïîäõîäÿùèé ôîðìàò ïèêñåëåé.","Îøèáêà",MB_ICONERROR);
+            MessageBoxA(NULL,"Не найден подходящий формат пикселей.","Ошибка",MB_ICONERROR);
             return false;
         }
     }
@@ -942,8 +942,8 @@ static bool InitGL(HWND hwnd)
     ReleaseDC(dummy,ddc); DestroyWindow(dummy);
     UnregisterClassA("GLDummy",GetModuleHandleA(NULL));
     if (!g_hrc){
-        MessageBoxA(NULL,"Äðàéâåð íå ïîääåðæèâàåò OpenGL 3.3 Core. Îáíîâèòå äðàéâåð âèäåîêàðòû.",
-                    "Îøèáêà",MB_ICONERROR);
+        MessageBoxA(NULL,"Драйвер не поддерживает OpenGL 3.3 Core. Обновите драйвер видеокарты.",
+                    "Ошибка",MB_ICONERROR);
         return false;
     }
     wglMakeCurrent(g_hdc,g_hrc);
@@ -955,7 +955,7 @@ static bool InitGL(HWND hwnd)
 }
 
 //==============================================================================
-// 7. ÑÎÇÄÀÍÈÅ ÑÖÅÍÛ
+// 7. СОЗДАНИЕ СЦЕНЫ
 //==============================================================================
 static bool InitScene()
 {
@@ -1029,14 +1029,14 @@ static bool InitScene()
     g_cone=MakeCone(20);      Upload(g_cone);
     g_plane=MakePlane();      Upload(g_plane);
 
-    float sv[6]={-1,-1, 3,-1, -1,3};                    // ïîëíîýêðàííûé òðåóãîëüíèê íåáà
+    float sv[6]={-1,-1, 3,-1, -1,3};                    // полноэкранный треугольник неба
     glGenVertexArrays(1,&g_skyVAO); glBindVertexArray(g_skyVAO);
     glGenBuffers(1,&g_skyVBO); glBindBuffer(GL_ARRAY_BUFFER,g_skyVBO);
     glBufferData(GL_ARRAY_BUFFER,sizeof(sv),sv,GL_STATIC_DRAW);
     glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,8,(void*)0);
     glEnableVertexAttribArray(0); glBindVertexArray(0);
 
-    glGenTextures(1,&g_shadowTex); glBindTexture(GL_TEXTURE_2D,g_shadowTex); // êàðòà òåíåé
+    glGenTextures(1,&g_shadowTex); glBindTexture(GL_TEXTURE_2D,g_shadowTex); // карта теней
     glTexImage2D(GL_TEXTURE_2D,0,GL_DEPTH_COMPONENT24,SHADOW_RES,SHADOW_RES,0,
                  GL_DEPTH_COMPONENT,GL_UNSIGNED_INT,NULL);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
@@ -1051,7 +1051,7 @@ static bool InitScene()
     glFramebufferTexture2D(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_TEXTURE_2D,g_shadowTex,0);
     glDrawBuffer(GL_NONE); glReadBuffer(GL_NONE);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE)
-        MessageBoxA(NULL,"Shadow FBO íå ñîáðàí","Îøèáêà",MB_ICONERROR);
+        MessageBoxA(NULL,"Shadow FBO не собран","Ошибка",MB_ICONERROR);
     glBindFramebuffer(GL_FRAMEBUFFER,0);
 
 	BuildWorld();
@@ -1065,7 +1065,7 @@ static bool InitScene()
 }
 
 //==============================================================================
-// 8. ÂÂÎÄ È ËÎÃÈÊÀ (óïðàâëåíèå êàê â GTA)
+// 8. ВВОД И ЛОГИКА (управление как в GTA)
 //==============================================================================
 static void LockMouse(){ if (!g_mouseLocked){ g_mouseLocked=true; while (ShowCursor(FALSE)>=0); } }
 static void UnlockMouse(){ if (g_mouseLocked){ g_mouseLocked=false; while (ShowCursor(TRUE)<0); } }
@@ -1080,9 +1080,9 @@ static void UnlockMouse(){ if (g_mouseLocked){ g_mouseLocked=false; while (ShowC
 		float t=-b-s; if (t<0.0f) t=-b+s;
 		return t>0.0f;
 	}
-	// Òî÷íîå ïåðåñå÷åíèå ëó÷à ñ êîíóñîì (åëü): âåðøèíà apex, öåíòð îñíîâàíèÿ baseC, ðàäèóñ r, âûñîòà h
+	// Точное пересечение луча с конусом (ель): вершина apex, центр основания baseC, радиус r, высота h
 static bool RayConeHit(const Vec3& ro,const Vec3& rd,const Vec3& baseC,float r,float h,const Vec3& apex){
-    float apexY=baseC.y+h;                          // èñòèííàÿ âûñîòà âåðøèíû
+    float apexY=baseC.y+h;                          // истинная высота вершины
     float tCap=(apexY-ro.y)/rd.y;
     if (tCap>0.0f){
         float px=ro.x+rd.x*tCap-baseC.x, pz=ro.z+rd.z*tCap-baseC.z;
@@ -1110,7 +1110,7 @@ static bool RayConeHit(const Vec3& ro,const Vec3& rd,const Vec3& baseC,float r,f
     }
     return false;
 }
-	// Ëó÷ â AABB (ÿùèêè)
+	// Луч в AABB (ящики)
 	static bool RayBoxHit(const Vec3& ro,const Vec3& rd,const Vec3& mn,const Vec3& mx){
 		float tmin=-1e30f, tmax=1e30f;
 		float o[3]={ro.x,ro.y,ro.z}, d[3]={rd.x,rd.y,rd.z};
@@ -1150,8 +1150,8 @@ static bool RayConeHit(const Vec3& ro,const Vec3& rd,const Vec3& baseC,float r,f
 			Vec3 c; float r;
 			PropSphere(g_props[i],c,r);
 			if (r<=0.001f) continue;
-			if (!RaySphereHit(ro,rd,c,r*1.05f)) continue;   // ãðóáûé îòñåâ ïî ñôåðå
-			if (g_props[i].mesh==&g_cone){                   // åëü — òî÷íûé òåñò êîíóñà
+			if (!RaySphereHit(ro,rd,c,r*1.05f)) continue;   // грубый отсев по сфере
+			if (g_props[i].mesh==&g_cone){                   // ель — точный тест конуса
 				float cr=(sqrtf(g_props[i].model.m[0]*g_props[i].model.m[0]+g_props[i].model.m[1]*g_props[i].model.m[1]+g_props[i].model.m[2]*g_props[i].model.m[2])
 						 +sqrtf(g_props[i].model.m[8]*g_props[i].model.m[8]+g_props[i].model.m[9]*g_props[i].model.m[9]+g_props[i].model.m[10]*g_props[i].model.m[10]))*0.5f;
 				float hh=sqrtf(g_props[i].model.m[4]*g_props[i].model.m[4]+g_props[i].model.m[5]*g_props[i].model.m[5]+g_props[i].model.m[6]*g_props[i].model.m[6]);
@@ -1164,7 +1164,7 @@ static bool RayConeHit(const Vec3& ro,const Vec3& rd,const Vec3& baseC,float r,f
 				float sz=sqrtf(g_props[i].model.m[8]*g_props[i].model.m[8]+g_props[i].model.m[9]*g_props[i].model.m[9]+g_props[i].model.m[10]*g_props[i].model.m[10]);
 				if (RayBoxHit(ro,rd,c-Vec3(sx,sy,sz)*0.5f,c+Vec3(sx,sy,sz)*0.5f)) return 0.0f;
 			} else {
-				return 0.0f;                                 // äóáû/êàìíè/êóñòû — ñôåðà è åñòü ôîðìà
+				return 0.0f;                                 // дубы/камни/кусты — сфера и есть форма
 			}
 		}
 		return 1.0f;
@@ -1202,7 +1202,7 @@ static void Update(float dt)
 {
 	//g_timeOfDay=0.35f;
 
-	if (g_mouseLocked){                                  // âðàùåíèå êàìåðû ìûøüþ
+	if (g_mouseLocked){                                  // вращение камеры мышью
 		RECT rc; GetClientRect(g_hwnd,&rc);
 		POINT c; c.x=(rc.right-rc.left)/2; c.y=(rc.bottom-rc.top)/2;
 		ClientToScreen(g_hwnd,&c);
@@ -1211,10 +1211,10 @@ static void Update(float dt)
 		if (dx||dy) SetCursorPos(c.x,c.y);
 		g_camYaw   -= dx*0.0032f;
 	g_camPitch += dy*0.0030f;
-	if (g_camPitch<-1.30f) g_camPitch=-1.30f;   // ââåðõ — òåïåðü ìîæíî çàäðàòü âûñîêî
-	if (g_camPitch> 1.30f) g_camPitch= 1.30f;   // âíèç
+	if (g_camPitch<-1.30f) g_camPitch=-1.30f;   // вверх — теперь можно задрать высоко
+	if (g_camPitch> 1.30f) g_camPitch= 1.30f;   // вниз
 	}
-    Vec3 fwd=norm(Vec3(sinf(g_camYaw),0,cosf(g_camYaw)));  // äâèæåíèå îòíîñèòåëüíî êàìåðû
+    Vec3 fwd=norm(Vec3(sinf(g_camYaw),0,cosf(g_camYaw)));  // движение относительно камеры
     Vec3 rgt=cross(fwd,Vec3(0,1,0));
     Vec3 wish(0,0,0);
     if (g_keys['W']||g_keys[VK_UP])    wish=wish+fwd;
@@ -1236,11 +1236,11 @@ static void Update(float dt)
         ch.vy-=18.0f*dt; ch.pos.y+=ch.vy*dt;
         if (ch.pos.y<=0.0f){ ch.pos.y=0.0f; ch.vy=0.0f; ch.grounded=true; }
     }
-	// Ïåðñîíàæ ñìîòðèò â ñòîðîíó âçãëÿäà êàìåðû (çà ìûøüþ)
+	// Персонаж смотрит в сторону взгляда камеры (за мышью)
 float spd2=len(ch.vel);
 float want;
-if (spd2>0.4f) want=atan2f(ch.vel.x,ch.vel.z);   // â äâèæåíèè — ïî êóðñó
-else           want=g_camYaw;                     // íà ìåñòå — çà ìûøüþ
+if (spd2>0.4f) want=atan2f(ch.vel.x,ch.vel.z);   // в движении — по курсу
+else           want=g_camYaw;                     // на месте — за мышью
 float d=want-ch.yaw;
 while (d>PI) d-=2*PI;
 while (d<-PI) d+=2*PI;
@@ -1251,57 +1251,57 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 	if (ch.pos.x> 190.0f) ch.pos.x= 190.0f; if (ch.pos.x<-190.0f) ch.pos.x=-190.0f;
     if (ch.pos.z> 190.0f) ch.pos.z= 190.0f; if (ch.pos.z<-190.0f) ch.pos.z=-190.0f;
 
-// Äèíàìè÷åñêàÿ äèñòàíöèÿ êàìåðû (êàê â GTA)
+// Динамическая дистанция камеры (как в GTA)
 	float baseDist = g_camDist;
 	float pitchFactor = 1.0f;
 	if (g_camPitch > 0.0f) {
-		// Ïðè âçãëÿäå ââåðõ óìåíüøàåì äèñòàíöèþ (äî 40% ïðè ìàêñèìàëüíîì íàêëîíå)
-		pitchFactor = 1.0f - (g_camPitch / 1.30f) * 0.75f;  // äî 25% äèñòàíöèè
+		// При взгляде вверх уменьшаем дистанцию (до 40% при максимальном наклоне)
+		pitchFactor = 1.0f - (g_camPitch / 1.30f) * 0.75f;  // до 25% дистанции
 	}
 	float effectiveDist = baseDist * pitchFactor;
 
-	// Âû÷èñëÿåì ïîçèöèþ êàìåðû
-	// ---- Êàìåðà îò 3-ãî ëèöà (ñòèëü GTA, ñ êîëëèçèåé î çåìëþ) ----
+	// Вычисляем позицию камеры
+	// ---- Камера от 3-го лица (стиль GTA, с коллизией о землю) ----
 	float cp=cosf(g_camPitch), sp=sinf(g_camPitch);
-	Vec3 dir(cp*sinf(g_camYaw), -sp, cp*cosf(g_camYaw));   // íàïðàâëåíèå îò êàìåðû ê öåëè
+	Vec3 dir(cp*sinf(g_camYaw), -sp, cp*cosf(g_camYaw));   // направление от камеры к цели
 	g_camTarget=ch.pos+Vec3(0,1.5f,0);
 
 	Vec3 camPos=g_camTarget-dir*g_camDist;
 
-	// Êàìåðà íå äîëæíà óõîäèòü ïîä çåìëþ: óêîðà÷èâàåì ëó÷ äî òî÷êè êàñàíèÿ
+	// Камера не должна уходить под землю: укорачиваем луч до точки касания
 	const float minCamHeight=0.3f;
 	if (camPos.y < minCamHeight && dir.y>0.0001f){
-		float t=(g_camTarget.y-minCamHeight)/dir.y;        // äèñòàíöèÿ äî êàñàíèÿ çåìëè
+		float t=(g_camTarget.y-minCamHeight)/dir.y;        // дистанция до касания земли
 		if (t>0.5f && t<g_camDist) camPos=g_camTarget-dir*t;
 	}
-	if (camPos.y<minCamHeight) camPos.y=minCamHeight;      // ñòðàõîâêà
+	if (camPos.y<minCamHeight) camPos.y=minCamHeight;      // страховка
 	g_camPos=camPos;
 
-		// ---- Öèêë äíÿ è íî÷è ----
+		// ---- Цикл дня и ночи ----
 	g_time+=dt;
 	g_timeOfDay+=dt/g_dayLength;
-	if (g_keys['M']) g_timeOfDay+=dt*0.03f;   // M — ïåðåìîòêà âïåð¸ä
-	if (g_keys['N']) g_timeOfDay-=dt*0.03f;   // N — íàçàä
+	if (g_keys['M']) g_timeOfDay+=dt*0.03f;   // M — перемотка вперёд
+	if (g_keys['N']) g_timeOfDay-=dt*0.03f;   // N — назад
 	if (g_timeOfDay>=1.0f) g_timeOfDay-=1.0f;
 	if (g_timeOfDay<0.0f)  g_timeOfDay+=1.0f;
-	float dayAng=(g_timeOfDay-0.25f)*2.0f*PI;             // 0.25 — ðàññâåò, 0.5 — ïîëäåíü
+	float dayAng=(g_timeOfDay-0.25f)*2.0f*PI;             // 0.25 — рассвет, 0.5 — полдень
 	g_sunDir=norm(Vec3(cosf(dayAng)*0.75f, sinf(dayAng), 0.35f));
 	g_moonDir=norm(Vec3(-g_sunDir.x, -g_sunDir.y*0.9f, -g_sunDir.z));
 	g_dayF=smoothstepf(-0.10f,0.20f,g_sunDir.y);
-	g_duskF = 1.0f - smoothstepf(0.0f, 0.45f, fabsf(g_sunDir.y));  // øèðå è ïëàâíåå
+	g_duskF = 1.0f - smoothstepf(0.0f, 0.45f, fabsf(g_sunDir.y));  // шире и плавнее
 	float warm=g_sunDir.y*2.0f; warm=warm<0?0:(warm>1?1:warm);
-	Vec3 sunCol=lerpv(Vec3(1.00f,0.50f,0.22f), Vec3(1.05f,0.96f,0.84f), warm); // îðàíæåâîå íà ðàññâåòå
+	Vec3 sunCol=lerpv(Vec3(1.00f,0.50f,0.22f), Vec3(1.05f,0.96f,0.84f), warm); // оранжевое на рассвете
 	float sunI=1.30f*g_dayF;
 	Vec3 moonCol(0.55f,0.65f,0.95f);
-	float moonI=0.42f*(1.0f-g_dayF);    // ëóíà ñèëüíåå — íî÷íûå òåíè âèäíû
+	float moonI=0.42f*(1.0f-g_dayF);    // луна сильнее — ночные тени видны
 	if (sunI>moonI){ g_keyDir=g_sunDir; g_keyCol=sunCol*sunI; g_fillDir=g_moonDir; g_fillCol=moonCol*moonI; }
 	else           { g_keyDir=g_moonDir; g_keyCol=moonCol*moonI; g_fillDir=g_sunDir; g_fillCol=sunCol*sunI; }
 	g_fogCol=lerpv(Vec3(0.030f,0.045f,0.090f), Vec3(0.72f,0.83f,0.96f), g_dayF);
     g_fogCol = lerpv(g_fogCol, Vec3(0.95f,0.50f,0.30f), g_duskF*0.55f);
 	g_fogCol=g_fogCol+Vec3(1.0f,0.42f,0.15f)*(g_duskF*0.25f);
-														// Àäàïòàöèÿ ãëàç ê ÿðêîìó ñâåòó
-	// Ïëàâíàÿ âèäèìîñòü ñîëíöà (ðåçóëüòàò îêêëþçèè ñ ïðîøëîé êàäðà)
-    // ---- Îáëàêà: âëèÿíèå íà îñëåïëåíèå, òåíè è êîíòðàñò ----
+														// Адаптация глаз к яркому свету
+	// Плавная видимость солнца (результат окклюзии с прошлой кадра)
+    // ---- Облака: влияние на ослепление, тени и контраст ----
 	float covOver=CloudCover(ch.pos.x,ch.pos.z,1.0f);
 	g_overcastU+=(covOver-g_overcastU)*(1.0f-expf(-dt*2.0f));
 	float cloudSun=0.0f;
@@ -1318,7 +1318,7 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 	float target=0.0f;
 	if (align>0.50f) target=(align-0.50f)/0.50f;
 	target=target*target*target;
-	target*=g_sunVis*g_dayF*(1.0f-cloudSun*0.9f);   // îáëàêà ãàñÿò îñëåïëåíèå    // íî÷üþ ñîëíöå íå ñëåïèò                                  // àäàïòàöèÿ òîëüêî êîãäà ñîëíöå âèäíî
+	target*=g_sunVis*g_dayF*(1.0f-cloudSun*0.9f);   // облака гасят ослепление    // ночью солнце не слепит                                  // адаптация только когда солнце видно
 	if (target>g_adapt) g_adapt+=(target-g_adapt)*(1.0f-expf(-dt*6.0f));
 	else                g_adapt+=(target-g_adapt)*(1.0f-expf(-dt*0.6f));
 
@@ -1326,18 +1326,18 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 }
 
 //==============================================================================
-// 9. ÐÅÍÄÅÐÈÍÃ: pass òåíåé -> íåáî -> ñöåíà
+// 9. РЕНДЕРИНГ: pass теней -> небо -> сцена
 //==============================================================================
 static void Render()
 {
 	Vec3 center=ch.pos+Vec3(0,1.2f,0);
-	Vec3 eye=center+g_keyDir*55.0f;   // êàìåðà ñâåòà íà ñòîðîíå ñîëíöà
+	Vec3 eye=center+g_keyDir*55.0f;   // камера света на стороне солнца
 	Mat4 lightVP=orthoP(-26,26,-26,26,10,110)*lookAt(eye,center,Vec3(0,1,0));
 
-    // --- pass 1: êàðòà ãëóáèíû ñî ñòîðîíû ñîëíöà ---
+    // --- pass 1: карта глубины со стороны солнца ---
 	glBindFramebuffer(GL_FRAMEBUFFER,g_shadowFBO);
     glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D,0);   // îòâÿçûâàåì shadow-òåêñòóðó ïåðåä çàïèñüþ â íå¸
+	glBindTexture(GL_TEXTURE_2D,0);   // отвязываем shadow-текстуру перед записью в неё
     glViewport(0,0,SHADOW_RES,SHADOW_RES);
     glClear(GL_DEPTH_BUFFER_BIT);
     glUseProgram(progShadow);
@@ -1354,14 +1354,14 @@ static void Render()
     }
     glCullFace(GL_BACK);
 
-    // --- pass 2: îñíîâíàÿ ñöåíà ---
+    // --- pass 2: основная сцена ---
     glBindFramebuffer(GL_FRAMEBUFFER,0);
     glViewport(0,0,g_w,g_h);
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
     Mat4 proj=perspective(60.0f*PI/180.0f,(float)g_w/(float)g_h,0.1f,600.0f);
     Mat4 view=lookAt(g_camPos,g_camTarget,Vec3(0,1,0));
 
-	glUseProgram(progSky);                                // ãðàäèåíòíîå íåáî
+	glUseProgram(progSky);                                // градиентное небо
     glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
 	Mat4 invVP=inverse(proj*view);
     glUniformMatrix4fv(US.invVP,1,GL_FALSE,invVP.m);
@@ -1378,7 +1378,7 @@ static void Render()
     glBindVertexArray(g_skyVAO); glDrawArrays(GL_TRIANGLES,0,3); glBindVertexArray(0);
     glDepthMask(GL_TRUE); glEnable(GL_DEPTH_TEST);
 
-	glUseProgram(progMain);                               // îáúåêòû è ïåðñîíàæ
+	glUseProgram(progMain);                               // объекты и персонаж
     glUniformMatrix4fv(U.view,1,GL_FALSE,view.m);
     glUniformMatrix4fv(U.proj,1,GL_FALSE,proj.m);
     glUniformMatrix4fv(U.lightVP,1,GL_FALSE,lightVP.m);
@@ -1415,7 +1415,7 @@ static void Render()
         DrawMesh(g_cube);
 	}
 
-		// ---- Âîäà ----
+		// ---- Вода ----
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 	glDepthMask(GL_FALSE);
@@ -1438,29 +1438,29 @@ static void Render()
 	glDepthMask(GL_TRUE);
 	glDisable(GL_BLEND);
 
-													 // ---- Îñëåïëåíèå ñîëíöåì ----
-	// ---- Àäàïòàöèÿ ê ÿðêîìó ñâåòó (çðà÷îê ñóæàåòñÿ => òåìíåå) ----
+													 // ---- Ослепление солнцем ----
+	// ---- Адаптация к яркому свету (зрачок сужается => темнее) ----
 	if (g_adapt>0.001f){
 		glDisable(GL_DEPTH_TEST);
 		glDepthMask(GL_FALSE);
 		glEnable(GL_BLEND);
 
-		// 1) Çàòåìíåíèå âñåé ñöåíû (óìíîæåíèå)
+		// 1) Затемнение всей сцены (умножение)
 		glUseProgram(progDim);
 		glUniform1f(UDim.dim,g_adapt);
-		glBlendFunc(GL_DST_COLOR,GL_ZERO);              // dst = src * dst  => òåìíåå
+		glBlendFunc(GL_DST_COLOR,GL_ZERO);              // dst = src * dst  => темнее
 		glBindVertexArray(g_skyVAO); glDrawArrays(GL_TRIANGLES,0,3); glBindVertexArray(0);
 
-		// 2) ßðêîå ñîëíöå ïîâåðõ (àääèòèâíî)
+		// 2) Яркое солнце поверх (аддитивно)
 		Vec4 sc=xform(proj*view, g_camPos+g_sunDir*100.0f);
 		if (sc.w>0.001f){
 			float sunU=(sc.x/sc.w)*0.5f+0.5f;
 			float sunV=(sc.y/sc.w)*0.5f+0.5f;
 			glUseProgram(progGlare);
 			glUniform2f(UG.sunUV,sunU,sunV);
-			glUniform1f(UG.intensity,g_adapt*g_sunVis);   // áëèê ãàñíåò, êîãäà ñîëíöå çà îáúåêòîì
+			glUniform1f(UG.intensity,g_adapt*g_sunVis);   // блик гаснет, когда солнце за объектом
 			glUniform1f(UG.aspect,(float)g_w/(float)g_h);
-			glBlendFunc(GL_ONE,GL_ONE);                 // dst = dst + src  => ÿð÷å
+			glBlendFunc(GL_ONE,GL_ONE);                 // dst = dst + src  => ярче
 			glBindVertexArray(g_skyVAO); glDrawArrays(GL_TRIANGLES,0,3); glBindVertexArray(0);
 		}
 
@@ -1471,7 +1471,7 @@ static void Render()
 }
 
 //==============================================================================
-// 10. ÎÊÍÎ È ÃËÀÂÍÛÉ ÖÈÊË
+// 10. ОКНО И ГЛАВНЫЙ ЦИКЛ
 //==============================================================================
 static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l)
 {
@@ -1507,7 +1507,7 @@ int WINAPI wWinMain(HINSTANCE hInst,HINSTANCE,LPWSTR,int nCmdShow)
     RegisterClassA(&wc);
     RECT rc={0,0,1280,720};
     AdjustWindowRect(&rc,WS_OVERLAPPEDWINDOW,FALSE);
-    g_hwnd=CreateWindowA("GtaGLScene","Çàãðóçêà...",WS_OVERLAPPEDWINDOW,
+    g_hwnd=CreateWindowA("GtaGLScene","Загрузка...",WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,CW_USEDEFAULT,rc.right-rc.left,rc.bottom-rc.top,NULL,NULL,hInst,NULL);
     if (!g_hwnd) return 1;
     ShowWindow(g_hwnd,nCmdShow); UpdateWindow(g_hwnd);
@@ -1534,7 +1534,7 @@ int WINAPI wWinMain(HINSTANCE hInst,HINSTANCE,LPWSTR,int nCmdShow)
         acc+=dt;
         if (acc>=1.0f){
             int hh=(int)(g_timeOfDay*24.0f), mm=(int)((g_timeOfDay*24.0f-hh)*60.0f);
-				sprintf(title,"OpenGL 3.3 | %.60s | FPS %d | %02d:%02d | WASD - õîäüáà, Shift - áåã, Ïðîáåë - ïðûæîê | ËÊÌ - ìûøü, Esc - îòïóñòèòü | M/N - âðåìÿ",
+				sprintf(title,"OpenGL 3.3 | %.60s | FPS %d | %02d:%02d | WASD - ходьба, Shift - бег, Пробел - прыжок | ЛКМ - мышь, Esc - отпустить | M/N - время",
 		g_renderer,(int)(frames/acc),hh,mm);
             SetWindowTextA(g_hwnd,title);
             frames=0; acc=0;
