@@ -417,104 +417,173 @@ void main(){
 
 static const char* FS_MAIN = R"glsl(
 #version 330 core
-in vec3 vNormal; in vec3 vWorld; in vec4 vLightSpace;
+
+in vec3 vNormal;
+in vec3 vWorld;
+in vec4 vLightSpace;
+
 uniform vec3 uColor, uKeyDir, uKeyCol, uFillDir, uFillCol, uCamPos, uFogCol;
 uniform float uDayF, uDuskF;
+
 uniform sampler2DShadow uShadowMap;
+
 uniform int uPattern;
 uniform vec2 uLakeC;
 uniform float uLakeR;
+
 uniform vec2 uCloudOff;
 uniform vec2 uSunXZY;
 uniform float uCloudSh, uOvercast;
+
 out vec4 outColor;
-float hash21(vec2 p){
+
+float hash21(vec2 p)
+{
     p = fract(p * vec2(123.34, 456.21));
     p += dot(p, p + 45.32);
     return fract(p.x * p.y);
 }
-float vnoise(vec2 p){
-    vec2 i=floor(p), f=fract(p);
-    f=f*f*(3.0-2.0*f);
-    float a=hash21(i), b=hash21(i+vec2(1.0,0.0));
-    float c=hash21(i+vec2(0.0,1.0)), d=hash21(i+vec2(1.0,1.0));
-    return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+
+float vnoise(vec2 p)
+{
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+
+    f = f * f * (3.0 - 2.0 * f);
+
+    float a = hash21(i);
+    float b = hash21(i + vec2(1.0, 0.0));
+    float c = hash21(i + vec2(0.0, 1.0));
+    float d = hash21(i + vec2(1.0, 1.0));
+
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
-float fbm(vec2 p){
-    float v=0.0; float a=0.5;
-    for (int i=0;i<5;i++){ v+=a*vnoise(p); p=p*2.03+vec2(1.7,9.2); a*=0.5; }
+
+float fbm(vec2 p)
+{
+    float v = 0.0;
+    float a = 0.5;
+
+    for (int i = 0; i < 5; i++)
+    {
+        v += a * vnoise(p);
+        p = p * 2.03 + vec2(1.7, 9.2);
+        a *= 0.5;
+    }
+
     return v;
 }
-float ShadowFactor(){
+
+float ShadowFactor()
+{
     vec3 p = vLightSpace.xyz / vLightSpace.w * 0.5 + 0.5;
-    if (p.z >= 1.0) return 1.0;
-    float ndl  = max(dot(normalize(vNormal), uKeyDir), 0.0);
+
+    if (p.z >= 1.0)
+        return 1.0;
+
+    float ndl = max(dot(normalize(vNormal), uKeyDir), 0.0);
     float bias = max(0.0022 * (1.0 - ndl), 0.0005);
     float texel = 1.0 / 4096.0;
+
     float s = 0.0;
-    for (int x=-1; x<=1; x++)
-        for (int y=-1; y<=1; y++)
-            s += texture(uShadowMap, vec3(p.xy + vec2(x,y)*texel*1.5, p.z - bias));
+
+    for (int x = -1; x <= 1; x++)
+    {
+        for (int y = -1; y <= 1; y++)
+        {
+            s += texture(uShadowMap, vec3(p.xy + vec2(x, y) * texel * 1.5, p.z - bias));
+        }
+    }
+
     vec2 edgeDist = abs(p.xy - 0.5);
     float edge = max(edgeDist.x, edgeDist.y);
     float fade = 1.0 - smoothstep(0.48, 0.50, edge);
+
     return mix(1.0, s / 9.0, fade);
 }
-void main(){
+
+void main()
+{
     vec3 N = normalize(vNormal);
     vec3 base = uColor;
-    if (uPattern == 1){
+
+    if (uPattern == 1)
+    {
         vec2 g = vWorld.xz;
-        float n1 = hash21(floor(g*0.6));
-        float n2 = hash21(floor(g*3.1)+17.0);
-        base = mix(vec3(0.22,0.42,0.17), vec3(0.30,0.52,0.20), n1);
-        base = mix(base, vec3(0.26,0.47,0.22), n2*0.5);
-        base = mix(vec3(0.46,0.39,0.27), base, smoothstep(2.5, 5.0, length(g)));
+
+        float n1 = hash21(floor(g * 0.6));
+        float n2 = hash21(floor(g * 3.1) + 17.0);
+
+        base = mix(vec3(0.22, 0.42, 0.17), vec3(0.30, 0.52, 0.20), n1);
+        base = mix(base, vec3(0.26, 0.47, 0.22), n2 * 0.5);
+        base = mix(vec3(0.46, 0.39, 0.27), base, smoothstep(2.5, 5.0, length(g)));
+
         float dl = length(g - uLakeC);
-        float sand = 1.0 - smoothstep(uLakeR-1.5, uLakeR+3.0, dl);
-        base = mix(base, vec3(0.55,0.47,0.33), sand*0.9);
-        base *= 1.0 - 0.18*(1.0-smoothstep(uLakeR-2.0, uLakeR, dl));
+        float sand = 1.0 - smoothstep(uLakeR - 1.5, uLakeR + 3.0, dl);
+        base = mix(base, vec3(0.55, 0.47, 0.33), sand * 0.9);
+
+        base *= 1.0 - 0.18 * (1.0 - smoothstep(uLakeR - 2.0, uLakeR, dl));
     }
+
     float ndlK = max(dot(N, uKeyDir), 0.0);
     float ndlF = max(dot(N, uFillDir), 0.0);
+
     float sh = ShadowFactor();
-    // ---- движущиеся тени облаков ----
-	float cloudSh = 1.0;
-	if (uCloudSh > 0.001)
-	{
-		vec2 cp = vWorld.xz + uSunXZY * (90.0 - vWorld.y) + uCloudOff;
 
-		float cc = fbm(cp * 0.006) + 0.18 * fbm(cp * 0.006 * 2.7 + vec2(5.2, 1.3));
+    // Если основной свет слабый, жёсткие тени уменьшаются или исчезают.
+    float keyStrength = length(uKeyCol);
+    float shadowWeight = smoothstep(0.03, 0.25, keyStrength);
+    sh = mix(1.0, sh, shadowWeight);
 
-		float mask = smoothstep(0.50, 0.72, cc);
+    // Облака дополнительно смягчают тени.
+    float cloudSoft = clamp(uCloudSh * 0.55 + uOvercast * 0.65, 0.0, 1.0);
+    sh = mix(sh, 1.0, cloudSoft * 0.35);
 
-		// Усиленные облачные тени
-		cloudSh = 1.0 - mask * uCloudSh * 1.35;
+    // Тени от облаков на поверхности.
+    float cloudSh = 1.0;
 
-		// Не даём тени стать полностью чёрной
-		cloudSh = clamp(cloudSh, 0.22, 1.0);
-	}
-    float hemi = 0.5 + 0.5*N.y;
-    vec3 dayAmb   = mix(vec3(0.15,0.18,0.14), vec3(0.33,0.40,0.52), hemi);
-    vec3 nightAmb = mix(vec3(0.020,0.028,0.050), vec3(0.045,0.060,0.100), hemi);
-	vec3 amb = mix(nightAmb, dayAmb, uDayF);
-	amb = mix(amb, vec3(0.30, 0.19, 0.13), uDuskF * 0.45);
+    if (uCloudSh > 0.001)
+    {
+        vec2 cp = vWorld.xz + uSunXZY * (90.0 - vWorld.y) + uCloudOff;
 
-	// При облачности поднимаем ambient, чтобы тени стали мягче
-	amb *= 1.0 + uOvercast * 0.35 * uDayF;
-	vec3 col = base * (amb + uKeyCol*ndlK*sh*cloudSh + uFillCol*ndlF);
-    col = mix(col, col*vec3(1.18,0.80,0.58), uDuskF*0.50);        // закатная окраска сцены
+        float cc = fbm(cp * 0.006) + 0.18 * fbm(cp * 0.006 * 2.7 + vec2(5.2, 1.3));
+
+        float mask = smoothstep(0.50, 0.72, cc);
+
+        cloudSh = 1.0 - mask * uCloudSh * 1.35;
+        cloudSh = clamp(cloudSh, 0.22, 1.0);
+    }
+
+    float hemi = 0.5 + 0.5 * N.y;
+
+    vec3 dayAmb = mix(vec3(0.15, 0.18, 0.14), vec3(0.33, 0.40, 0.52), hemi);
+    vec3 nightAmb = mix(vec3(0.020, 0.028, 0.050), vec3(0.045, 0.060, 0.100), hemi);
+
+    vec3 amb = mix(nightAmb, dayAmb, uDayF);
+    amb = mix(amb, vec3(0.30, 0.19, 0.13), uDuskF * 0.45);
+
+    // При облаках ambient поднимается и днём, и ночью.
+    amb *= 1.0 + uOvercast * (0.35 * uDayF + 0.50 * (1.0 - uDayF));
+
+    vec3 col = base * (amb + uKeyCol * ndlK * sh * cloudSh + uFillCol * ndlF);
+
+    // Тёплый закатный тон.
+    col = mix(col, col * vec3(1.18, 0.80, 0.58), uDuskF * 0.50);
+
+    // Туман.
     float dist = length(vWorld - uCamPos);
-    col = mix(col, uFogCol, clamp(1.0-exp(-dist*dist*0.000020), 0.0, 1.0));
-	// Более заметное потемнение при облачности
-	col *= 1.0 - uOvercast * 0.26 * uDayF;
+    col = mix(col, uFogCol, clamp(1.0 - exp(-dist * dist * 0.000020), 0.0, 1.0));
 
-	// Более сильная десатурация, чтобы погода выглядела пасмурнее
-	float luma = dot(col, vec3(0.299, 0.587, 0.114));
-	col = mix(col, vec3(luma), uOvercast * 0.38 * uDayF);
-	outColor = vec4(col, 1.0);
-})glsl";
+    // Пасмурное затемнение.
+    col *= 1.0 - uOvercast * 0.26 * uDayF;
 
+    // Пасмурная десатурация.
+    float luma = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(col, vec3(luma), uOvercast * 0.38 * uDayF);
+
+    outColor = vec4(col, 1.0);
+}
+)glsl";
 static const char* VS_WATER = R"glsl(
 #version 330 core
 layout(location=0) in vec3 aPos;
@@ -581,10 +650,15 @@ void main(){
     vec3 R=reflect(-V,N);
     float fres=0.02+0.98*pow(1.0-max(dot(N,V),0.0),5.0);
     vec3 zen=mix(vec3(0.010,0.015,0.040),vec3(0.11,0.31,0.66),uDayF);
-    vec3 sky=(R.y>=0.0)?mix(uFogCol,zen,pow(R.y,0.6)):uFogCol;   // отражение неба
-    float sh=ShadowFactor();
-    float sd=max(dot(R,uKeyDir),0.0);                   // дорожка солнца/луны
-    float spec=pow(sd,200.0)*2.5+pow(sd,24.0)*0.10;
+	vec3 sky=(R.y>=0.0)?mix(uFogCol,zen,pow(R.y,0.6)):uFogCol;   // отражение неба
+	float sh=ShadowFactor();
+
+	// Слабый или закрытый облаками свет не должен давать жёсткие тени на воде
+	float keyStrength = length(uKeyCol);
+	sh = mix(1.0, sh, smoothstep(0.03, 0.25, keyStrength));
+
+	float sd=max(dot(R,uKeyDir),0.0);
+	float spec=pow(sd,200.0)*2.5+pow(sd,24.0)*0.10;
     vec3 deep=mix(vec3(0.008,0.012,0.020),vec3(0.02,0.11,0.14),uDayF);
     float dl=length(vWorld.xz-uLakeC);
     float edge=1.0-smoothstep(uLakeR-2.5,uLakeR,dl);
@@ -627,7 +701,7 @@ out vec4 outColor;
 float hash13(vec3 p){ p=fract(p*0.1031); p+=dot(p,p.zyx+31.32); return fract((p.x+p.y)*p.z); }
 float hash21c(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
 float vnoise(vec2 p){
-    vec2 i=floor(p), f=fract(p);
+	vec2 i=floor(p), f=fract(p);
     f=f*f*(3.0-2.0*f);
     float a=hash21c(i), b=hash21c(i+vec2(1.0,0.0));
     float c=hash21c(i+vec2(0.0,1.0)), d=hash21c(i+vec2(1.0,1.0));
@@ -656,16 +730,36 @@ void main(){
     below=mix(below,vec3(0.40,0.22,0.18),dusk*0.6);
     vec3 col=(h>=0.0)?mix(horizon,zenith,pow(h,0.60)):mix(horizon,below,pow(-h,0.45));
     float band=exp(-h*h*14.0)*dusk;
-    col+=vec3(1.00,0.50,0.22)*band*(0.25+0.45*sunGlow);
+	col+=vec3(1.00,0.50,0.22)*band*(0.25+0.45*sunGlow);
     vec3 sp=floor(d*220.0);
     float star=step(0.9985,hash13(sp))*(1.0-dayF)*smoothstep(0.0,0.12,h);
-    float s=max(dot(d,uSunDir),0.0);
-    vec3 sunTint=mix(vec3(1.0,0.93,0.78), vec3(1.0,0.55,0.25), dusk);
-    col+=sunTint*pow(s,1500.0)*6.0*dayF;
-    col+=sunTint*pow(s,8.0)*0.20*dayF;
-    float m=max(dot(d,uMoonDir),0.0);
-    col+=vec3(0.85,0.90,1.00)*pow(m,2000.0)*2.0*(1.0-dayF);
-    col+=vec3(0.35,0.45,0.70)*pow(m,8.0)*0.10*(1.0-dayF);
+	float s = max(dot(d, uSunDir), 0.0);
+	vec3 sunTint = mix(vec3(1.0, 0.93, 0.78), vec3(1.0, 0.55, 0.25), dusk);
+	// Солнце видно только если оно выше горизонта
+	float sunUp = smoothstep(-0.02, 0.02, uSunDir.y);
+
+	col += sunTint * pow(s, 1500.0) * 6.0 * dayF * sunUp;
+	col += sunTint * pow(s, 8.0) * 0.20 * dayF * sunUp;
+	float m = max(dot(d, uMoonDir), 0.0);
+    float illum = max(dot(-d, uSunDir), 0.0);
+	float phase = smoothstep(-0.02, 0.08, illum);
+	float moonDisk = pow(m, 2000.0);
+	float moonHalo = pow(m, 120.0) * 0.08;
+	col += vec3(0.85, 0.90, 1.00) * moonDisk * phase * 2.0 * (1.0 - dayF);
+	col += vec3(0.35, 0.45, 0.70) * moonHalo * phase * (1.0 - dayF);
+	// Примерная фаза луны по направлению на солнце и луну:
+	// если солнце и луна в одной стороне -> новолуние
+	// если солнце и луна напротив -> полнолуние
+	float moonPhaseIllum = clamp((1.0 - dot(uSunDir, uMoonDir)) * 0.5, 0.0, 1.0);
+
+	// Луна видна только над горизонтом
+	float moonUp = smoothstep(-0.06, 0.10, uMoonDir.y);
+
+	// Днём луна слабая, ночью сильнее, в новолуние почти не видна
+	float moonVis = (0.08 + 0.92 * (1.0 - dayF)) * moonUp * (0.10 + 0.90 * moonPhaseIllum);
+
+	col += vec3(0.85, 0.90, 1.00) * pow(m, 2000.0) * 2.0 * moonVis;
+	col += vec3(0.35, 0.45, 0.70) * pow(m, 8.0) * 0.10 * moonVis;
     // ==== Облака: два слоя + фейковый объём ====
     float cloudA=0.0;
     if (h>0.015){
@@ -697,7 +791,7 @@ void main(){
         col=mix(col,cloudCol,cl*0.95);
         cloudA=max(cl,cl2);
     }
-    col+=vec3(0.85,0.90,1.00)*star*(1.0-cloudA);
+	col+=vec3(0.85,0.90,1.00)*star*(1.0-cloudA);
     outColor=vec4(col,1.0);
 })glsl";
 
@@ -795,8 +889,20 @@ static std::vector<Part> g_charParts;
 static Player ch = { Vec3(0,0,0), 0.0f, Vec3(0,0,0), 0.0f, true, 0.0f };
 static Vec3 g_sunDir, g_camPos, g_camTarget;
 
-static float g_timeOfDay=0.32f, g_dayLength=240.0f;   // 240 сек на полные сутки
-static float g_time=0.0f;
+static float g_timeOfDay = 0.32f;
+static float g_dayLength = 240.0f;
+static float g_time = 0.0f;
+static float g_cloudTime = 0.0f;  // время для облаков, синхронно с M/N
+
+// Непрерывное время в сутках, не зацикливается
+static float g_timeDays = 0.32f;
+
+// Начальный возраст луны в днях
+// 0 = новолуние
+// 7.38 = первая четверть
+// 14.77 = полнолуние
+// 22.15 = последняя четверть
+static float g_moonAgeDays = 9.7f;
 static float g_dayF=1.0f, g_duskF=0.0f;
 static Vec3 g_moonDir(0,-1,0), g_keyDir(0,1,0), g_keyCol(1,1,1);
 static Vec3 g_fillDir(0,1,0), g_fillCol(0,0,0), g_fogCol(0.72f,0.83f,0.96f);
@@ -1208,7 +1314,8 @@ static bool RayConeHit(const Vec3& ro,const Vec3& rd,const Vec3& baseC,float r,f
 		return v;
 	}
 	static float CloudCover(float px,float pz,float elev){
-		float wx=px+g_time*1.6f, wz=pz+g_time*0.5f;
+		float wx = px + g_cloudTime * 1.6f;
+		float wz = pz + g_cloudTime * 0.5f;
 		float cov=fbmf(wx*0.006f,wz*0.006f)+0.18f*fbmf(wx*0.0162f+5.2f,wz*0.0162f+1.3f);
 		return smoothstepf(0.52f,0.74f,cov)*smoothstepf(0.015f,0.14f,elev);
 	}
@@ -1292,34 +1399,91 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 	if (camPos.y<minCamHeight) camPos.y=minCamHeight;      // страховка
 	g_camPos=camPos;
 
-		// ---- Цикл дня и ночи ----
-	g_time+=dt;
-	g_timeOfDay+=dt/g_dayLength;
-	if (g_keys['M']) g_timeOfDay+=dt*0.03f;   // M — перемотка вперёд
-	if (g_keys['N']) g_timeOfDay-=dt*0.03f;   // N — назад
-	if (g_timeOfDay>=1.0f) g_timeOfDay-=1.0f;
-	if (g_timeOfDay<0.0f)  g_timeOfDay+=1.0f;
-	float dayAng=(g_timeOfDay-0.25f)*2.0f*PI;             // 0.25 — рассвет, 0.5 — полдень
-	g_sunDir=norm(Vec3(cosf(dayAng)*0.75f, sinf(dayAng), 0.35f));
-	g_moonDir=norm(Vec3(-g_sunDir.x, -g_sunDir.y*0.9f, -g_sunDir.z));
+			// ---- Цикл дня и ночи ----
+	g_time += dt;
+	//основное мировое время в сутках
+	g_timeOfDay += dt / g_dayLength;
+
+	// Облака движутся синхронно с перемоткой времени
+	g_cloudTime += dt;
+	if (g_keys['M']) {
+		g_timeOfDay += dt * 0.03f;
+		g_cloudTime += dt * 0.03f * g_dayLength;
+	}
+	if (g_keys['N']) {
+		g_timeOfDay -= dt * 0.03f;
+		g_cloudTime -= dt * 0.03f * g_dayLength;
+	}
+
+	// g_timeOfDay остаётся только для интерфейса и солнца
+	g_timeOfDay = g_timeDays - floorf(g_timeDays);
+	if (g_timeOfDay < 0.0f) g_timeOfDay += 1.0f;
+	// Солнце: астрономически привязано к времени суток
+	// 0.25 = 06:00 восход
+	// 0.50 = 12:00 полдень
+	// 0.75 = 18:00 закат
+	float dayAng = (g_timeOfDay - 0.25f) * 2.0f * PI;
+	g_sunDir = norm(Vec3(cosf(dayAng) * 0.75f, sinf(dayAng), 0.35f));
+
+	// Луна: астрономически привязана к солнцу и фазе
+	const float MOON_SYNODIC = 29.53f;
+
+	float moonAge = fmodf(g_timeDays + g_moonAgeDays, MOON_SYNODIC);
+	if (moonAge < 0.0f) moonAge += MOON_SYNODIC;
+
+	// Фаза луны:
+	// 0      = новолуние, луна рядом с солнцем
+	// PI     = полнолуние, луна напротив солнца
+	float moonPhaseAng = (moonAge / MOON_SYNODIC) * 2.0f * PI;
+
+	// Угол луны относительно солнца
+	float moonAng = dayAng + moonPhaseAng;
+
+	g_moonDir = norm(Vec3(cosf(moonAng) * 0.75f, sinf(moonAng), 0.35f));
 	g_dayF=smoothstepf(-0.10f,0.20f,g_sunDir.y);
 	g_duskF = 1.0f - smoothstepf(0.0f, 0.45f, fabsf(g_sunDir.y));  // шире и плавнее
 	float warm=g_sunDir.y*2.0f; warm=warm<0?0:(warm>1?1:warm);
 	Vec3 sunCol=lerpv(Vec3(1.00f,0.50f,0.22f), Vec3(1.05f,0.96f,0.84f), warm); // оранжевое на рассвете
-	float sunI=1.30f*g_dayF;
-	Vec3 moonCol(0.55f,0.65f,0.95f);
-	float moonI=0.42f*(1.0f-g_dayF);    // луна сильнее — ночные тени видны
-	if (sunI>moonI){ g_keyDir=g_sunDir; g_keyCol=sunCol*sunI; g_fillDir=g_moonDir; g_fillCol=moonCol*moonI; }
-	else           { g_keyDir=g_moonDir; g_keyCol=moonCol*moonI; g_fillDir=g_sunDir; g_fillCol=sunCol*sunI; }
+	float sunI = 1.30f * g_dayF;
+	Vec3 moonCol(0.55f, 0.65f, 0.95f);
+
+	// Освещённость луны по фазе:
+	// 0 = новолуние
+	// 1 = полнолуние
+	float moonIllum = 0.5f * (1.0f - cosf(moonPhaseAng));
+
+	// Луна должна быть над горизонтом
+	float moonUp = smoothstepf(-0.08f, 0.12f, g_moonDir.y);
+
+	// Днём луна слабая, а в новолуние почти не светит
+	float moonDayFade = 1.0f - g_dayF * 0.90f;
+	float moonI = 0.55f * moonUp * moonDayFade * (0.12f + 0.88f * moonIllum);
+
+	if (sunI > moonI)
+	{
+		g_keyDir = g_sunDir;
+		g_keyCol = sunCol * sunI;
+		g_fillDir = g_moonDir;
+		g_fillCol = moonCol * moonI;
+	}
+	else
+	{
+		g_keyDir = g_moonDir;
+		g_keyCol = moonCol * moonI;
+		g_fillDir = g_sunDir;
+		g_fillCol = sunCol * sunI;
+	}
 	g_fogCol=lerpv(Vec3(0.030f,0.045f,0.090f), Vec3(0.72f,0.83f,0.96f), g_dayF);
-    g_fogCol = lerpv(g_fogCol, Vec3(0.95f,0.50f,0.30f), g_duskF*0.55f);
+	g_fogCol = lerpv(g_fogCol, Vec3(0.95f,0.50f,0.30f), g_duskF*0.55f);
 	g_fogCol=g_fogCol+Vec3(1.0f,0.42f,0.15f)*(g_duskF*0.25f);
 														// Адаптация глаз к яркому свету
 	// Плавная видимость солнца (результат окклюзии с прошлой кадра)
-    // ---- Облака: влияние на ослепление, тени и контраст ----
+	// ---- Облака: влияние на ослепление, тени и контраст ----
+// ---- Облака: локальная облачность над игроком ----
 	float covOver = CloudCover(ch.pos.x, ch.pos.z, 1.0f);
 	g_overcastU += (covOver - g_overcastU) * (1.0f - expf(-dt * 2.0f));
 
+	// ---- Облачность на пути к солнцу, нужно для солнечного блика ----
 	float cloudSun = 0.0f;
 	if (g_sunDir.y > 0.03f)
 	{
@@ -1328,17 +1492,34 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 							  g_sunDir.y);
 	}
 
-	float sunHeight = g_sunDir.y * 5.0f;
-	if (sunHeight < 0.0f) sunHeight = 0.0f;
-	if (sunHeight > 1.0f) sunHeight = 1.0f;
+	// ---- Облачность на пути к текущему основному источнику света: солнце или луна ----
+	float cloudKey = 0.0f;
+	if (g_keyDir.y > 0.03f)
+	{
+		cloudKey = CloudCover(g_camPos.x + g_keyDir.x / g_keyDir.y * 90.0f,
+							  g_camPos.z + g_keyDir.z / g_keyDir.y * 90.0f,
+							  g_keyDir.y);
+	}
 
-	// Усиливаем облачные тени на поверхности
-	g_cloudShAmt = (g_sunDir.y > 0.05f) ? g_dayF * sunHeight * 0.95f : 0.0f;
+	float keyHeight = g_keyDir.y * 5.0f;
+	if (keyHeight < 0.0f) keyHeight = 0.0f;
+	if (keyHeight > 1.0f) keyHeight = 1.0f;
 
-	// Новое: если облако закрывает солнце, глобально уменьшаем солнечный свет
-	float cloudDim = 1.0f - cloudSun * 0.78f * g_dayF;
+	float cloudAmount = cloudKey;
+	if (covOver > cloudAmount) cloudAmount = covOver;
+
+	// Определяем, солнце сейчас главный источник или луна
+	float keyIsSun = (dot(g_keyDir, g_sunDir) > 0.90f) ? 1.0f : 0.0f;
+
+	// Для солнца облачные тени сильнее, для луны слабее
+	float cloudShadowStrength = 0.55f + (0.95f - 0.55f) * keyIsSun;
+
+	g_cloudShAmt = (g_keyDir.y > 0.05f) ? keyHeight * cloudShadowStrength * cloudAmount : 0.0f;
+
+	// Если облака закрывают солнце или луну, глобально гасим основной свет
+	float cloudDim = 1.0f - cloudKey * 0.82f;
 	g_keyCol = g_keyCol * cloudDim;
-	g_fillCol = g_fillCol * (1.0f - cloudSun * 0.45f * g_dayF);
+	g_fillCol = g_fillCol * (1.0f - cloudKey * 0.35f);
 
 	if (g_overcastU < 0.0f) g_overcastU = 0.0f;
 	if (g_overcastU > 1.0f) g_overcastU = 1.0f;
@@ -1426,9 +1607,16 @@ static void Render()
 	glUniform1f(U.lakeR,g_lakeR);
 	glUniform1f(U.duskF,g_duskF);
 	glUniform2f(U.cloudOff,g_time*1.6f,g_time*0.5f);
-	float sxzyX=0.0f, sxzyZ=0.0f;
-	if (g_sunDir.y>0.05f){ sxzyX=g_sunDir.x/g_sunDir.y; sxzyZ=g_sunDir.z/g_sunDir.y; }
-	glUniform2f(U.sunXZY,sxzyX,sxzyZ);
+	float sxzyX = 0.0f, sxzyZ = 0.0f;
+
+	// Используем текущий основной источник света: солнце или луну
+	if (g_keyDir.y > 0.05f)
+	{
+		sxzyX = g_keyDir.x / g_keyDir.y;
+		sxzyZ = g_keyDir.z / g_keyDir.y;
+	}
+
+	glUniform2f(U.sunXZY, sxzyX, sxzyZ);
 	glUniform1f(U.cloudSh,g_cloudShAmt);
 	glUniform1f(U.overcast,g_overcastU);
 
