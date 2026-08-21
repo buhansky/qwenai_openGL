@@ -10,7 +10,8 @@
 #include <string.h>
 #include <vector>
 
-#pragma comment(lib, "opengl32.lib")
+#include <commctrl.h>
+#pragma comment(lib, "comctl32.lib")
 
 //==============================================================================
 // 1. МИНИМАЛЬНЫЕ ОПРЕДЕЛЕНИЯ OPENGL (чтобы не тянуть GLAD/GLEW)
@@ -694,106 +695,293 @@ void main(){
 
 static const char* FS_SKY = R"glsl(
 #version 330 core
+
 in vec3 vDir;
+
 uniform vec3 uSunDir, uMoonDir, uCamPos;
 uniform float uDayF, uDuskF, uTime;
+uniform float uStarSize;
+uniform float uTimeDays;
+
 out vec4 outColor;
-float hash13(vec3 p){ p=fract(p*0.1031); p+=dot(p,p.zyx+31.32); return fract((p.x+p.y)*p.z); }
-float hash21c(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
-float vnoise(vec2 p){
-	vec2 i=floor(p), f=fract(p);
-    f=f*f*(3.0-2.0*f);
-    float a=hash21c(i), b=hash21c(i+vec2(1.0,0.0));
-    float c=hash21c(i+vec2(0.0,1.0)), d=hash21c(i+vec2(1.0,1.0));
-    return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+
+// Hash для звёзд и шума
+float hash13(vec3 p)
+{
+    p = fract(p * 0.1031);
+    p += dot(p, p.zyx + 31.32);
+    return fract((p.x + p.y) * p.z);
 }
-float fbm(vec2 p){
-    float v=0.0; float a=0.5;
-    for (int i=0;i<5;i++){ v+=a*vnoise(p); p=p*2.03+vec2(1.7,9.2); a*=0.5; }
-    return v;
+
+float hash21c(vec2 p)
+{
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
 }
-void main(){
-    vec3 d=normalize(vDir);
-    float h=d.y;
-    float dayF=uDayF;
-    float dusk=uDuskF;
-    vec3 zenith=mix(vec3(0.010,0.015,0.040), vec3(0.11,0.31,0.66), dayF);
-    vec3 horizon=mix(vec3(0.030,0.045,0.090), vec3(0.72,0.83,0.96), dayF);
-    vec3 dh=normalize(vec3(d.x,0.0,d.z)+vec3(1e-5));
-    vec3 shd=normalize(vec3(uSunDir.x,0.0,uSunDir.z)+vec3(1e-5));
-    float sunGlow=pow(max(dot(dh,shd),0.0),2.0);
-    vec3 duskHorizon=mix(vec3(0.42,0.20,0.42), vec3(1.00,0.40,0.10), sunGlow);
-    vec3 duskZenith=vec3(0.22,0.16,0.40);
-    horizon=mix(horizon,duskHorizon,dusk);
-    zenith=mix(zenith,duskZenith,dusk*0.5);
-    vec3 below=mix(vec3(0.010,0.012,0.020), vec3(0.52,0.58,0.56), dayF);
-    below=mix(below,vec3(0.40,0.22,0.18),dusk*0.6);
-    vec3 col=(h>=0.0)?mix(horizon,zenith,pow(h,0.60)):mix(horizon,below,pow(-h,0.45));
-    float band=exp(-h*h*14.0)*dusk;
-	col+=vec3(1.00,0.50,0.22)*band*(0.25+0.45*sunGlow);
-    vec3 sp=floor(d*220.0);
-    float star=step(0.9985,hash13(sp))*(1.0-dayF)*smoothstep(0.0,0.12,h);
-	float s = max(dot(d, uSunDir), 0.0);
-	vec3 sunTint = mix(vec3(1.0, 0.93, 0.78), vec3(1.0, 0.55, 0.25), dusk);
-	// Солнце видно только если оно выше горизонта
-	float sunUp = smoothstep(-0.02, 0.02, uSunDir.y);
 
-	col += sunTint * pow(s, 1500.0) * 6.0 * dayF * sunUp;
-	col += sunTint * pow(s, 8.0) * 0.20 * dayF * sunUp;
-	float m = max(dot(d, uMoonDir), 0.0);
-    float illum = max(dot(-d, uSunDir), 0.0);
-	float phase = smoothstep(-0.02, 0.08, illum);
-	float moonDisk = pow(m, 2000.0);
-	float moonHalo = pow(m, 120.0) * 0.08;
-	col += vec3(0.85, 0.90, 1.00) * moonDisk * phase * 2.0 * (1.0 - dayF);
-	col += vec3(0.35, 0.45, 0.70) * moonHalo * phase * (1.0 - dayF);
-	// Примерная фаза луны по направлению на солнце и луну:
-	// если солнце и луна в одной стороне -> новолуние
-	// если солнце и луна напротив -> полнолуние
-	float moonPhaseIllum = clamp((1.0 - dot(uSunDir, uMoonDir)) * 0.5, 0.0, 1.0);
+float vnoise(vec2 p)
+{
+    vec2 i = floor(p);
+    vec2 f = fract(p);
 
-	// Луна видна только над горизонтом
-	float moonUp = smoothstep(-0.06, 0.10, uMoonDir.y);
+    f = f * f * (3.0 - 2.0 * f);
 
-	// Днём луна слабая, ночью сильнее, в новолуние почти не видна
-	float moonVis = (0.08 + 0.92 * (1.0 - dayF)) * moonUp * (0.10 + 0.90 * moonPhaseIllum);
+    float a = hash21c(i);
+    float b = hash21c(i + vec2(1.0, 0.0));
+    float c = hash21c(i + vec2(0.0, 1.0));
+    float d = hash21c(i + vec2(1.0, 1.0));
 
-	col += vec3(0.85, 0.90, 1.00) * pow(m, 2000.0) * 2.0 * moonVis;
-	col += vec3(0.35, 0.45, 0.70) * pow(m, 8.0) * 0.10 * moonVis;
-    // ==== Облака: два слоя + фейковый объём ====
-    float cloudA=0.0;
-    if (h>0.015){
-        float invY=1.0/max(d.y,0.03);
-        // --- слой 1: основной, высота 90 м ---
-        vec2 cuv=uCamPos.xz+d.xz*invY*90.0+vec2(uTime*1.6,uTime*0.5);
-        float sc=0.006;
-        float cov=fbm(cuv*sc)+0.18*fbm(cuv*sc*2.7+vec2(5.2,1.3));
-        float cl=smoothstep(0.52,0.74,cov)*smoothstep(0.015,0.14,h);
-        vec3 cloudCol=vec3(0.0);
-        if (cl>0.001){
-            float covS=fbm((cuv+shd.xz*9.0)*sc);          // плотность в сторону солнца
-            float grad=cov-covS;                       // градиент = псевдо-нормаль
-            float lit=clamp(0.55+grad*2.2,0.0,1.0)*(0.30+0.70*dayF);
-            float edgeGlow=(1.0-smoothstep(0.56,0.74,cov))*0.55;  // светлые тонкие края
-            vec3 bright=mix(vec3(0.10,0.11,0.16), vec3(1.02,1.02,1.04), dayF);
-            vec3 dark  =mix(vec3(0.030,0.035,0.060), vec3(0.52,0.54,0.60), dayF);
-            cloudCol=mix(dark,bright,lit)+bright*edgeGlow*0.6;
-            cloudCol=mix(cloudCol, vec3(1.15,0.55,0.30), dusk*(0.30+0.60*sunGlow)*(0.35+0.65*lit));
-            cloudCol+=sunTint*pow(s,16.0)*0.8*dayF;    // серебряная кайма
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float fbm(vec2 p)
+{
+    float v = 0.0;
+    float a = 0.5;
+
+    for (int i = 0; i < 5; i++)
+    {
+        v += a * vnoise(p);
+        p = p * 2.03 + vec2(1.7, 9.2);
+        a *= 0.5;
+	}
+
+	return v;
+}
+
+// Звёзды: стабильные яркие точки без мерцания.
+// Размер регулируется опцией uStarSize.
+float StarField(vec3 dir, float size)
+{
+    // Сетка звёзд
+    vec3 p = dir * 300.0;
+
+    vec3 id = floor(p);
+    vec3 f = fract(p) - 0.5;
+
+    float h = hash13(id);
+
+    // Плотность звёзд
+    if (h < 0.9955)
+        return 0.0;
+
+    // Смещение звезды внутри ячейки
+    vec3 off = vec3(hash13(id + vec3(19.7, 7.3, 5.1)),
+                    hash13(id + vec3(31.3, 11.9, 3.7)),
+                    hash13(id + vec3(47.1, 23.5, 9.3))) - 0.5;
+
+    float d = length(f - off * 0.5);
+
+    // Размер ядра и свечения
+    float coreR = 0.055 * size;
+    float glowR = 0.18 * size;
+
+    // Антиалиасинг, чтобы звёзды не дрожали
+    float aa = fwidth(d) * 1.5 + 0.001;
+
+    float core = 1.0 - smoothstep(max(coreR - aa, 0.0), coreR + aa, d);
+    float glow = (1.0 - smoothstep(max(glowR - aa, 0.0), glowR + aa, d)) * 0.12;
+
+    // Индивидуальная яркость звезды
+    float b = 0.9 + 0.1 * hash13(id + vec3(3.1, 17.7, 29.3));
+
+    // Мерцание отключено
+    return (core + glow) * b;
+}
+
+void main()
+{
+    vec3 d = normalize(vDir);
+
+    float h = d.y;
+    float dayF = uDayF;
+    float dusk = uDuskF;
+
+    // Базовый градиент неба
+    vec3 zenith = mix(vec3(0.010, 0.015, 0.040), vec3(0.11, 0.31, 0.66), dayF);
+    vec3 horizon = mix(vec3(0.030, 0.045, 0.090), vec3(0.72, 0.83, 0.96), dayF);
+
+    vec3 dh = normalize(vec3(d.x, 0.0, d.z) + vec3(1e-5));
+    vec3 shd = normalize(vec3(uSunDir.x, 0.0, uSunDir.z) + vec3(1e-5));
+
+    float sunGlow = pow(max(dot(dh, shd), 0.0), 2.0);
+
+    vec3 duskHorizon = mix(vec3(0.42, 0.20, 0.42), vec3(1.00, 0.40, 0.10), sunGlow);
+    vec3 duskZenith = vec3(0.22, 0.16, 0.40);
+
+    horizon = mix(horizon, duskHorizon, dusk);
+    zenith = mix(zenith, duskZenith, dusk * 0.5);
+
+    vec3 below = mix(vec3(0.010, 0.012, 0.020), vec3(0.52, 0.58, 0.56), dayF);
+    below = mix(below, vec3(0.40, 0.22, 0.18), dusk * 0.6);
+
+    vec3 col = (h >= 0.0) ? mix(horizon, zenith, pow(h, 0.60))
+                          : mix(horizon, below, pow(-h, 0.45));
+
+    float band = exp(-h * h * 14.0) * dusk;
+    col += vec3(1.00, 0.50, 0.22) * band * (0.25 + 0.45 * sunGlow);
+
+	// Вращение звёзд привязано к игровым суткам
+	float starAng = (uTimeDays - 0.25) * 6.28318530718;
+    float ca = cos(starAng);
+    float sa = sin(starAng);
+
+    vec3 starDir = vec3(d.x * ca - d.z * sa,
+                        d.y,
+                        d.x * sa + d.z * ca);
+
+    // Солнце
+    float s = max(dot(d, uSunDir), 0.0);
+
+    vec3 sunTint = mix(vec3(1.0, 0.93, 0.78), vec3(1.0, 0.55, 0.25), dusk);
+
+    // Солнце не светит сквозь землю
+    float sunUp = smoothstep(-0.02, 0.02, uSunDir.y);
+
+    col += sunTint * pow(s, 1500.0) * 6.0 * dayF * sunUp;
+    col += sunTint * pow(s, 8.0) * 0.20 * dayF * sunUp;
+
+    // Облака считаются до луны и звёзд, чтобы их можно было перекрыть
+    float cloudA = 0.0;
+
+    if (h > 0.015)
+    {
+        float invY = 1.0 / max(d.y, 0.03);
+
+        // Нижний слой облаков
+        vec2 cuv = uCamPos.xz + d.xz * invY * 90.0 + vec2(uTime * 1.6, uTime * 0.5);
+
+        float sc = 0.006;
+
+        float cov = fbm(cuv * sc) + 0.18 * fbm(cuv * sc * 2.7 + vec2(5.2, 1.3));
+        float cl = smoothstep(0.52, 0.74, cov) * smoothstep(0.015, 0.14, h);
+
+        vec3 cloudCol = vec3(0.0);
+
+        if (cl > 0.001)
+        {
+            float covS = fbm((cuv + shd.xz * 9.0) * sc);
+            float grad = cov - covS;
+
+            float lit = clamp(0.55 + grad * 2.2, 0.0, 1.0) *
+                        (0.30 + 0.70 * dayF);
+
+            float edgeGlow = (1.0 - smoothstep(0.56, 0.74, cov)) * 0.55;
+
+            vec3 bright = mix(vec3(0.10, 0.11, 0.16), vec3(1.02, 1.02, 1.04), dayF);
+            vec3 dark = mix(vec3(0.030, 0.035, 0.060), vec3(0.52, 0.54, 0.60), dayF);
+
+            cloudCol = mix(dark, bright, lit) + bright * edgeGlow * 0.6;
+
+            cloudCol = mix(cloudCol, vec3(1.15, 0.55, 0.30),
+                           dusk * (0.30 + 0.60 * sunGlow) * (0.35 + 0.65 * lit));
+
+            cloudCol += sunTint * pow(s, 16.0) * 0.8 * dayF;
         }
-        // --- слой 2: высокий и редкий, 150 м ---
-        vec2 cuv2=uCamPos.xz+d.xz*invY*150.0+vec2(uTime*2.3,uTime*0.7);
-        float cov2=fbm(cuv2*0.0035+vec2(9.7,3.1));
-        float cl2=smoothstep(0.56,0.76,cov2)*smoothstep(0.02,0.18,h)*0.45;
-        vec3 col2=mix(vec3(0.05,0.06,0.10), vec3(0.95,0.95,0.99), dayF);
-        col2=mix(col2, vec3(1.05,0.60,0.40), dusk*0.5);
-        col=mix(col,col2,cl2);
-        col=mix(col,cloudCol,cl*0.95);
-        cloudA=max(cl,cl2);
+
+        // Верхний слой облаков
+        vec2 cuv2 = uCamPos.xz + d.xz * invY * 150.0 + vec2(uTime * 2.3, uTime * 0.7);
+
+        float cov2 = fbm(cuv2 * 0.0035 + vec2(9.7, 3.1));
+        float cl2 = smoothstep(0.56, 0.76, cov2) *
+                    smoothstep(0.02, 0.18, h) * 0.45;
+
+        vec3 col2 = mix(vec3(0.05, 0.06, 0.10), vec3(0.95, 0.95, 0.99), dayF);
+        col2 = mix(col2, vec3(1.05, 0.60, 0.40), dusk * 0.5);
+
+        // Облака рисуются поверх неба и частично перекрывают солнце/небо
+        col = mix(col, col2, cl2);
+        col = mix(col, cloudCol, cl);
+
+        // Плотность облаков для скрытия луны и звёзд
+        cloudA = clamp(max(cl, cl2 * 1.6), 0.0, 1.0);
     }
-	col+=vec3(0.85,0.90,1.00)*star*(1.0-cloudA);
-    outColor=vec4(col,1.0);
-})glsl";
+
+    // Чем плотнее облака, тем сильнее скрываются луна и звёзды
+    float cloudMask = 1.0 - smoothstep(0.03, 0.35, cloudA);
+
+    // Луна
+    float m = max(dot(d, uMoonDir), 0.0);
+
+    // Большой диск луны
+    float moonRadius = 0.030;
+    float moonEdge = 0.0012;
+
+    float moonDisk = smoothstep(cos(moonRadius + moonEdge),
+                                cos(moonRadius - moonEdge),
+                                m);
+
+    // Ориентация терминатора по солнцу
+    vec3 T = uSunDir - uMoonDir * dot(uSunDir, uMoonDir);
+    float tlen = length(T);
+
+    if (tlen < 0.0001)
+    {
+        vec3 up = (abs(uMoonDir.y) > 0.99) ? vec3(1.0, 0.0, 0.0)
+                                           : vec3(0.0, 1.0, 0.0);
+        T = normalize(cross(uMoonDir, up));
+    }
+    else
+    {
+        T = T / tlen;
+    }
+
+    vec3 B = normalize(cross(uMoonDir, T));
+
+    // Локальные координаты на диске луны
+    float mx = dot(d, T) / moonRadius;
+    float my = dot(d, B) / moonRadius;
+
+    float mLen = length(vec2(mx, my));
+
+    // Изогнутый терминатор
+    float curve = sqrt(max(1.0 - my * my, 0.0));
+    float phaseCos = clamp(dot(uSunDir, uMoonDir), -1.0, 1.0);
+
+    float litArg = mx - phaseCos * curve;
+    float litMask = smoothstep(-0.06, 0.06, litArg);
+
+    // Луна видна только над горизонтом, слабее днём и скрывается облаками
+    float moonUp = smoothstep(-0.06, 0.10, uMoonDir.y);
+    float moonVis = (0.10 + 0.90 * (1.0 - dayF)) * moonUp * cloudMask;
+
+    // Лунные моря и пятна
+    float maria = vnoise(vec2(mx, my) * 2.3 + vec2(7.3, 4.1));
+    maria = smoothstep(0.62, 0.35, maria) * 0.16;
+
+    float craters = vnoise(vec2(mx, my) * 8.0 + vec2(13.7, 9.2));
+    craters = smoothstep(0.58, 0.30, craters) * 0.10;
+
+    float moonSpots = (maria + craters) * smoothstep(1.0, 0.8, mLen);
+
+    // Желтоватая луна
+    vec3 moonCoreCol = vec3(0.92, 0.88, 0.74);
+    vec3 moonHaloCol = vec3(0.45, 0.42, 0.30);
+
+    vec3 moonAlbedo = moonCoreCol * (1.0 - moonSpots);
+
+    float moonHalo = pow(m, 120.0) * 0.07;
+
+    col += moonAlbedo * moonDisk * litMask * 1.8 * moonVis;
+    col += moonHaloCol * moonHalo * litMask * moonVis;
+
+    // Звёзды рисуем после облаков и луны
+	float star = StarField(starDir, uStarSize);
+
+    // Звёзды видны только ночью, выше горизонта,
+    // скрываются облаками и не рисуются на диске луны
+    star *= (1.0 - dayF);
+    star *= smoothstep(0.0, 0.12, h);
+    star *= cloudMask;
+    star *= (1.0 - moonDisk);
+
+    // Яркие белые точки
+    col += vec3(0.95, 0.97, 1.0) * star * 1.85;
+
+    outColor = vec4(col, 1.0);
+}
+)glsl";
 
 static const char* VS_GLARE = R"glsl(
 #version 330 core
@@ -910,6 +1098,44 @@ static Vec3 g_fillDir(0,1,0), g_fillCol(0,0,0), g_fogCol(0.72f,0.83f,0.96f);
 static HWND g_hwnd; static HDC g_hdc; static HGLRC g_hrc;
 static int g_w=1280, g_h=720;
 static bool g_keys[256]; static bool g_mouseLocked=false; static bool g_msaa=false;
+// Настройки сцены
+struct SceneOptions
+{
+    bool vsync;          // вертикальная синхронизация
+    bool pauseTime;      // пауза времени
+    float starSize;      // размер звёзд
+    float drawDistance;  // дальность прорисовки объектов
+    bool fullscreen;     // полный экран
+    int fullW;           // ширина полноэкранного режима
+    int fullH;           // высота полноэкранного режима
+};
+
+static SceneOptions g_opt = { true, false, 1.6f, 220.0f, false, 1920, 1080 };
+
+// Текущее состояние полноэкранного режима
+static bool g_fsActive = false;
+
+// Rect окна до перехода в полный экран
+static RECT g_savedWindowRect = { 100, 100, 1380, 820 };
+
+// Combo с разрешениями
+static HWND g_optResCombo = NULL;
+
+// ID элементов окна опций
+enum
+{
+    IDC_OPT_VSYNC = 1001,
+    IDC_OPT_PAUSE_TIME,
+    IDC_OPT_STAR_SIZE,
+    IDC_OPT_DRAW_DIST,
+    IDC_OPT_FULLSCREEN,
+    IDC_OPT_RES,
+    IDC_OPT_CLOSE
+};
+
+static HWND g_optWnd = NULL;
+static HWND g_optStarTB = NULL;
+static HWND g_optDrawTB = NULL;
 static float g_camYaw=0.0f, g_camPitch=0.35f, g_camDist=6.0f;
 
 static GLuint progMain,progSky,progShadow;
@@ -921,7 +1147,7 @@ static struct { GLint dim; } UDim;
 static GLuint g_shadowFBO,g_shadowTex,g_skyVAO,g_skyVBO;
 static const int SHADOW_RES=4096;
 static struct { GLint model,view,proj,lightVP,color,keyDir,keyCol,fillDir,fillCol,cam,shadow,pattern,dayF,fogCol,lakeC,lakeR,duskF,cloudOff,sunXZY,cloudSh,overcast; } U;
-static struct { GLint invVP,cam,sun,moon,dayF,duskF,time; } US;
+static struct { GLint invVP,cam,sun,moon,dayF,duskF,time,starSize,timeDays; } US;
 static struct { GLint lightVP,model; } UD;
 static char g_renderer[128]="";
 
@@ -1022,7 +1248,7 @@ static bool InitGL(HWND hwnd)
     int dummyFmt=ChoosePixelFormat(ddc,&pfd);
     SetPixelFormat(ddc,dummyFmt,&pfd);
     HGLRC tmpRC=wglCreateContext(ddc);
-    wglMakeCurrent(ddc,tmpRC);
+	wglMakeCurrent(ddc,tmpRC);
     pwglChoosePixelFormatARB=(PFNWGLCHOOSEPIXELFORMATARB)wglGetProcAddress("wglChoosePixelFormatARB");
     pwglCreateContextAttribsARB=(PFNWGLCREATECONTEXTATTRIBSARB)wglGetProcAddress("wglCreateContextAttribsARB");
     pwglSwapIntervalEXT=(PFNWGLSWAPINTERVALEXT)wglGetProcAddress("wglSwapIntervalEXT");
@@ -1068,7 +1294,8 @@ static bool InitGL(HWND hwnd)
         return false;
     }
     wglMakeCurrent(g_hdc,g_hrc);
-    if (pwglSwapIntervalEXT) pwglSwapIntervalEXT(1);   // VSync
+    // VSync берётся из настроек
+	if (pwglSwapIntervalEXT) pwglSwapIntervalEXT(g_opt.vsync ? 1 : 0);
 	LoadGL();
     const char* r=(const char*)glGetString(GL_RENDERER);
     if (r) strncpy(g_renderer,r,sizeof(g_renderer)-1);
@@ -1118,7 +1345,8 @@ static bool InitScene()
 	US.duskF=glGetUniformLocation(progSky,"uDuskF");
     UD.lightVP=glGetUniformLocation(progShadow,"uLightVP");
 	UD.model=glGetUniformLocation(progShadow,"uModel");
-	US.time=glGetUniformLocation(progSky,"uTime");
+	US.starSize=glGetUniformLocation(progSky,"uStarSize");
+	US.timeDays=glGetUniformLocation(progSky,"uTimeDays");
 
 	UW.model=glGetUniformLocation(progWater,"uModel");
 	UW.view=glGetUniformLocation(progWater,"uView");
@@ -1400,21 +1628,30 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 	g_camPos=camPos;
 
 			// ---- Цикл дня и ночи ----
-	g_time += dt;
+	// Время идёт, если не включена пауза или пользователь использует M/N
+	bool timeActive = !g_opt.pauseTime || g_keys['M'] || g_keys['N'];
 
-	g_timeDays += dt / g_dayLength;
-	g_cloudTime += dt;
-
-	if (g_keys['M'])
+	if (timeActive)
 	{
-		g_timeDays += dt * 0.03f;
-		g_cloudTime += dt * 0.03f * g_dayLength;
-	}
+		g_time += dt;
 
-	if (g_keys['N'])
-	{
-		g_timeDays -= dt * 0.03f;
-		g_cloudTime -= dt * 0.03f * g_dayLength;
+		g_timeDays += dt / g_dayLength;
+		g_cloudTime += dt;
+
+		// Скорость перемотки времени
+		float scrubSpeed = 0.25f;
+
+		if (g_keys['M'])
+		{
+			g_timeDays += dt * scrubSpeed;
+			g_cloudTime += dt * scrubSpeed * g_dayLength;
+		}
+
+		if (g_keys['N'])
+		{
+			g_timeDays -= dt * scrubSpeed;
+			g_cloudTime -= dt * scrubSpeed * g_dayLength;
+		}
 	}
 
 	g_timeOfDay = g_timeDays;
@@ -1543,6 +1780,19 @@ if (spd2>0.4f) ch.phase+=spd2*dt*2.6f;
 	BuildCharacterParts();
 }
 
+// Проверка видимости объекта по дальности прорисовки
+static bool PropVisible(const Prop& p)
+{
+    // Землю не скрываем
+    if (p.mesh == &g_plane)
+        return true;
+
+    Vec3 c(p.model.m[12], p.model.m[13], p.model.m[14]);
+
+    return len(c - g_camPos) <= g_opt.drawDistance;
+}
+
+
 //==============================================================================
 // 9. РЕНДЕРИНГ: pass теней -> небо -> сцена
 //==============================================================================
@@ -1588,7 +1838,11 @@ static void Render()
     glUniform3f(US.moon,g_moonDir.x,g_moonDir.y,g_moonDir.z);
 	glUniform1f(US.dayF,g_dayF);
 	glUniform1f(US.duskF,g_duskF);
-	glUniform1f(US.time,g_time);
+	glUniform1f(US.time, g_cloudTime);
+	glUniform1f(US.starSize, g_opt.starSize);
+		// Для звёзд передаём долю суток, чтобы не терять точность на больших значениях
+	float dayFrac = g_timeDays - floorf(g_timeDays);
+	glUniform1f(US.timeDays, dayFrac);
 
     glUniform2f(U.lakeC,g_lakeX,g_lakeZ);
 	glUniform1f(U.lakeR,g_lakeR);
@@ -1610,7 +1864,7 @@ static void Render()
     glUniform2f(U.lakeC,g_lakeX,g_lakeZ);
 	glUniform1f(U.lakeR,g_lakeR);
 	glUniform1f(U.duskF,g_duskF);
-	glUniform2f(U.cloudOff,g_time*1.6f,g_time*0.5f);
+	glUniform2f(U.cloudOff, g_cloudTime * 1.6f, g_cloudTime * 0.5f);
 	float sxzyX = 0.0f, sxzyZ = 0.0f;
 
 	// Используем текущий основной источник света: солнце или луну
@@ -1627,14 +1881,16 @@ static void Render()
 	glUniform3f(U.cam,g_camPos.x,g_camPos.y,g_camPos.z);
 	glUniform1i(U.shadow,0);
     glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D,g_shadowTex);
-    for (size_t i=0;i<g_props.size();i++){
-        glUniformMatrix4fv(U.model,1,GL_FALSE,g_props[i].model.m);
-        glUniform3f(U.color,g_props[i].color.x,g_props[i].color.y,g_props[i].color.z);
+	for (size_t i=0;i<g_props.size();i++){
+		if (!PropVisible(g_props[i])) continue;
+
+		glUniformMatrix4fv(U.model,1,GL_FALSE,g_props[i].model.m);
+		glUniform3f(U.color,g_props[i].color.x,g_props[i].color.y,g_props[i].color.z);
         glUniform1i(U.pattern,g_props[i].pattern);
         DrawMesh(*g_props[i].mesh);
     }
     for (size_t i=0;i<g_charParts.size();i++){
-        glUniformMatrix4fv(U.model,1,GL_FALSE,g_charParts[i].m.m);
+		glUniformMatrix4fv(U.model,1,GL_FALSE,g_charParts[i].m.m);
         glUniform3f(U.color,g_charParts[i].c.x,g_charParts[i].c.y,g_charParts[i].c.z);
         glUniform1i(U.pattern,0);
         DrawMesh(g_cube);
@@ -1695,6 +1951,466 @@ static void Render()
 	}
 }
 
+
+//==============================================================================
+// Сохранение и загрузка опций
+//==============================================================================
+
+// Путь к файлу options.ini рядом с exe
+static void GetOptionsPath(char* path, int n)
+{
+    GetModuleFileNameA(NULL, path, n);
+
+    char* slash = strrchr(path, '\\');
+    if (slash)
+        *(slash + 1) = 0;
+
+    strcat(path, "options.ini");
+}
+
+// Сохранить опции в файл
+static void SaveOptions()
+{
+    char path[512];
+    GetOptionsPath(path, sizeof(path));
+
+    FILE* f = fopen(path, "w");
+    if (!f)
+        return;
+
+    fprintf(f, "vsync=%d\n", g_opt.vsync ? 1 : 0);
+    fprintf(f, "pauseTime=%d\n", g_opt.pauseTime ? 1 : 0);
+    fprintf(f, "starSize=%.2f\n", g_opt.starSize);
+    fprintf(f, "drawDistance=%.0f\n", g_opt.drawDistance);
+    fprintf(f, "fullscreen=%d\n", g_opt.fullscreen ? 1 : 0);
+    fprintf(f, "fullW=%d\n", g_opt.fullW);
+    fprintf(f, "fullH=%d\n", g_opt.fullH);
+
+    fclose(f);
+}
+
+// Загрузить опции из файла
+static void LoadOptions()
+{
+    char path[512];
+    GetOptionsPath(path, sizeof(path));
+
+    FILE* f = fopen(path, "r");
+    if (!f)
+        return;
+
+    char line[128];
+
+    while (fgets(line, sizeof(line), f))
+    {
+        int iv;
+        float fv;
+
+        if (sscanf(line, "vsync=%d", &iv) == 1)
+            g_opt.vsync = (iv != 0);
+        else if (sscanf(line, "pauseTime=%d", &iv) == 1)
+            g_opt.pauseTime = (iv != 0);
+        else if (sscanf(line, "starSize=%f", &fv) == 1)
+            g_opt.starSize = fv;
+        else if (sscanf(line, "drawDistance=%f", &fv) == 1)
+            g_opt.drawDistance = fv;
+        else if (sscanf(line, "fullscreen=%d", &iv) == 1)
+            g_opt.fullscreen = (iv != 0);
+        else if (sscanf(line, "fullW=%d", &iv) == 1)
+            g_opt.fullW = iv;
+        else if (sscanf(line, "fullH=%d", &iv) == 1)
+            g_opt.fullH = iv;
+    }
+
+    fclose(f);
+
+    // Ограничения, чтобы значения не выходили за пределы UI
+    if (g_opt.starSize < 0.5f) g_opt.starSize = 0.5f;
+    if (g_opt.starSize > 2.5f) g_opt.starSize = 2.5f;
+
+    if (g_opt.drawDistance < 80.0f) g_opt.drawDistance = 80.0f;
+    if (g_opt.drawDistance > 300.0f) g_opt.drawDistance = 300.0f;
+
+    if (g_opt.fullW < 640) g_opt.fullW = 640;
+    if (g_opt.fullH < 480) g_opt.fullH = 480;
+}
+
+//==============================================================================
+// Полноэкранный режим
+//==============================================================================
+
+static void ApplyFullscreen()
+{
+    // Если состояние уже соответствует опциям, ничего не делаем
+    if (g_opt.fullscreen == g_fsActive)
+        return;
+
+    if (g_opt.fullscreen)
+    {
+        // Сохраняем положение окна только один раз перед входом в fullscreen
+        if (!g_fsActive)
+            GetWindowRect(g_hwnd, &g_savedWindowRect);
+
+        // ВАЖНО: используем DEVMODEA для A-версий функций Windows
+        DEVMODEA dm = {};
+        dm.dmSize = sizeof(dm);
+
+        EnumDisplaySettingsA(NULL, ENUM_CURRENT_SETTINGS, &dm);
+
+        dm.dmPelsWidth = g_opt.fullW;
+        dm.dmPelsHeight = g_opt.fullH;
+        dm.dmBitsPerPel = 32;
+        dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
+
+        LONG res = ChangeDisplaySettingsA(&dm, CDS_FULLSCREEN);
+
+        // Если режим недоступен, возвращаемся в оконный режим
+        if (res != DISP_CHANGE_SUCCESSFUL)
+        {
+            ChangeDisplaySettingsA(NULL, 0);
+
+            g_opt.fullscreen = false;
+            g_fsActive = false;
+
+            if (g_optWnd)
+                CheckDlgButton(g_optWnd, IDC_OPT_FULLSCREEN, BST_UNCHECKED);
+
+            SaveOptions();
+
+            MessageBoxA(g_hwnd,
+                        "Выбранное полноэкранное разрешение недоступно.",
+                        "Опции",
+                        MB_ICONWARNING);
+
+            return;
+        }
+
+        // Убираем рамку окна и растягиваем на весь экран
+        SetWindowLongPtrA(g_hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+        SetWindowPos(g_hwnd, HWND_TOP,
+                     0, 0,
+                     g_opt.fullW, g_opt.fullH,
+                     SWP_FRAMECHANGED);
+
+        g_fsActive = true;
+    }
+    else
+    {
+        // Возврат к обычному дисплейному режиму
+        ChangeDisplaySettingsA(NULL, 0);
+
+        // Возвращаем обычную рамку окна
+        SetWindowLongPtrA(g_hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+
+        SetWindowPos(g_hwnd, HWND_TOP,
+                     g_savedWindowRect.left,
+                     g_savedWindowRect.top,
+                     g_savedWindowRect.right - g_savedWindowRect.left,
+                     g_savedWindowRect.bottom - g_savedWindowRect.top,
+                     SWP_FRAMECHANGED);
+
+        g_fsActive = false;
+    }
+}
+
+//==============================================================================
+// Окно опций сцены (F1)
+//==============================================================================
+
+// Обработчик окна опций
+static LRESULT CALLBACK OptionsWndProc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    switch (m)
+    {
+        case WM_COMMAND:
+        {
+            int id = LOWORD(w);
+
+            // VSync
+            if (id == IDC_OPT_VSYNC)
+            {
+                g_opt.vsync = SendMessage((HWND)l, BM_GETCHECK, 0, 0) == BST_CHECKED;
+
+                if (pwglSwapIntervalEXT)
+                    pwglSwapIntervalEXT(g_opt.vsync ? 1 : 0);
+
+                SaveOptions();
+                return 0;
+            }
+
+            // Пауза времени
+            if (id == IDC_OPT_PAUSE_TIME)
+            {
+                g_opt.pauseTime = SendMessage((HWND)l, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                SaveOptions();
+                return 0;
+            }
+
+            // Полный экран
+            if (id == IDC_OPT_FULLSCREEN)
+            {
+                g_opt.fullscreen = SendMessage((HWND)l, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                ApplyFullscreen();
+                SaveOptions();
+                return 0;
+            }
+
+            // Выбор разрешения
+            if (id == IDC_OPT_RES && HIWORD(w) == CBN_SELCHANGE)
+            {
+                char buf[32];
+
+                int len = (int)SendMessage((HWND)l, WM_GETTEXT, sizeof(buf) - 1, (LPARAM)buf);
+                buf[len] = 0;
+
+                int w2 = 0, h2 = 0;
+
+                if (sscanf(buf, "%dx%d", &w2, &h2) == 2)
+                {
+                    g_opt.fullW = w2;
+                    g_opt.fullH = h2;
+
+                    // Если уже находимся в полном экране, меняем режим сразу
+                    if (g_opt.fullscreen)
+                        ApplyFullscreen();
+
+                    SaveOptions();
+                }
+
+                return 0;
+            }
+
+            // Закрыть окно
+            if (id == IDC_OPT_CLOSE)
+            {
+                DestroyWindow(h);
+                return 0;
+            }
+
+            break;
+        }
+
+        case WM_HSCROLL:
+        {
+            HWND tb = (HWND)l;
+            int id = GetDlgCtrlID(tb);
+            int pos = (int)SendMessage(tb, TBM_GETPOS, 0, 0);
+
+            // Размер звёзд
+            if (id == IDC_OPT_STAR_SIZE)
+                g_opt.starSize = pos / 100.0f;
+
+            // Дальность прорисовки
+            if (id == IDC_OPT_DRAW_DIST)
+                g_opt.drawDistance = (float)pos;
+
+            // Сохраняем после отпускания ползунка
+            if (LOWORD(w) == TB_ENDTRACK)
+                SaveOptions();
+
+            return 0;
+        }
+
+        case WM_DESTROY:
+        {
+            g_optWnd = NULL;
+            return 0;
+        }
+    }
+
+    return DefWindowProcA(h, m, w, l);
+}
+
+
+
+// Создание окна опций
+static void CreateOptionsWindow()
+{
+	// Если окно уже есть, просто показываем его
+	if (g_optWnd)
+	{
+        ShowWindow(g_optWnd, SW_SHOW);
+        SetForegroundWindow(g_optWnd);
+        return;
+    }
+
+    // При открытии опций отпускаем мышь
+    UnlockMouse();
+
+    WNDCLASSA wc = {};
+    wc.lpfnWndProc = OptionsWndProc;
+    wc.hInstance = GetModuleHandleA(NULL);
+    wc.lpszClassName = "SceneOptions";
+    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+
+    RegisterClassA(&wc);
+
+	RECT rc = { 0, 0, 380, 440 };
+    AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
+
+    g_optWnd = CreateWindowExA(
+        0,
+        "SceneOptions",
+        "Опции сцены",
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        rc.right - rc.left,
+        rc.bottom - rc.top,
+        g_hwnd,
+        NULL,
+        wc.hInstance,
+        NULL
+    );
+
+    HFONT font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+
+    int y = 12;
+
+    // VSync
+    HWND hVSync = CreateWindowExA(
+        0, "BUTTON", "VSync",
+        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+        15, y, 220, 22,
+        g_optWnd, (HMENU)IDC_OPT_VSYNC, wc.hInstance, NULL
+    );
+    SendMessage(hVSync, WM_SETFONT, (WPARAM)font, TRUE);
+    if (g_opt.vsync) SendMessage(hVSync, BM_SETCHECK, BST_CHECKED, 0);
+    y += 28;
+
+    // Пауза времени
+    HWND hPause = CreateWindowExA(
+        0, "BUTTON", "Пауза времени",
+        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+        15, y, 220, 22,
+        g_optWnd, (HMENU)IDC_OPT_PAUSE_TIME, wc.hInstance, NULL
+	);
+	SendMessage(hPause, WM_SETFONT, (WPARAM)font, TRUE);
+	if (g_opt.pauseTime) SendMessage(hPause, BM_SETCHECK, BST_CHECKED, 0);
+	y += 30;
+
+	// Размер звёзд
+	HWND hStarLabel = CreateWindowExA(
+		0, "STATIC", "Размер звёзд",
+		WS_CHILD | WS_VISIBLE,
+		15, y, 220, 18,
+		g_optWnd, NULL, wc.hInstance, NULL
+	);
+	SendMessage(hStarLabel, WM_SETFONT, (WPARAM)font, TRUE);
+	y += 20;
+
+	g_optStarTB = CreateWindowExA(
+		0, "msctls_trackbar32", NULL,
+		WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_AUTOTICKS,
+		15, y, 330, 30,
+		g_optWnd, (HMENU)IDC_OPT_STAR_SIZE, wc.hInstance, NULL
+	);
+
+	SendMessage(g_optStarTB, TBM_SETRANGE, TRUE, MAKELPARAM(50, 250));
+	SendMessage(g_optStarTB, TBM_SETPOS, TRUE, (LPARAM)(int)(g_opt.starSize * 100.0f));
+	y += 42;
+
+	// Дальность прорисовки
+	HWND hDrawLabel = CreateWindowExA(
+		0, "STATIC", "Дальность прорисовки",
+		WS_CHILD | WS_VISIBLE,
+		15, y, 220, 18,
+		g_optWnd, NULL, wc.hInstance, NULL
+	);
+	SendMessage(hDrawLabel, WM_SETFONT, (WPARAM)font, TRUE);
+	y += 20;
+
+	g_optDrawTB = CreateWindowExA(
+		0, "msctls_trackbar32", NULL,
+		WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_AUTOTICKS,
+		15, y, 330, 30,
+		g_optWnd, (HMENU)IDC_OPT_DRAW_DIST, wc.hInstance, NULL
+	);
+
+	SendMessage(g_optDrawTB, TBM_SETRANGE, TRUE, MAKELPARAM(80, 300));
+	SendMessage(g_optDrawTB, TBM_SETPOS, TRUE, (LPARAM)(int)g_opt.drawDistance);
+	y += 42;
+
+	// Полный экран
+	HWND hFs = CreateWindowExA(
+		0, "BUTTON", "Полный экран",
+		WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+		15, y, 220, 22,
+		g_optWnd, (HMENU)IDC_OPT_FULLSCREEN, wc.hInstance, NULL
+	);
+	SendMessage(hFs, WM_SETFONT, (WPARAM)font, TRUE);
+	if (g_opt.fullscreen) SendMessage(hFs, BM_SETCHECK, BST_CHECKED, 0);
+	y += 28;
+
+	// Разрешение для полного экрана
+	HWND hResLabel = CreateWindowExA(
+		0, "STATIC", "Разрешение полного экрана",
+		WS_CHILD | WS_VISIBLE,
+		15, y, 220, 18,
+		g_optWnd, NULL, wc.hInstance, NULL
+	);
+	SendMessage(hResLabel, WM_SETFONT, (WPARAM)font, TRUE);
+	y += 20;
+
+	g_optResCombo = CreateWindowExA(
+		0, "COMBOBOX", "",
+		WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST,
+		15, y, 170, 200,
+		g_optWnd, (HMENU)IDC_OPT_RES, wc.hInstance, NULL
+	);
+	SendMessage(g_optResCombo, WM_SETFONT, (WPARAM)font, TRUE);
+
+	// Список типовых разрешений
+	const char* resList[] =
+	{
+		"1280x720",
+		"1600x900",
+		"1920x1080",
+		"2560x1440",
+		"3840x2160"
+	};
+
+	char curRes[32];
+	sprintf(curRes, "%dx%d", g_opt.fullW, g_opt.fullH);
+
+	int sel = 0;
+	bool found = false;
+
+	for (int i = 0; i < 5; i++)
+	{
+		SendMessage(g_optResCombo, CB_ADDSTRING, 0, (LPARAM)resList[i]);
+
+		if (strcmp(resList[i], curRes) == 0)
+		{
+			sel = i;
+			found = true;
+		}
+	}
+
+	// Если текущее разрешение нестандартное, добавляем его отдельно
+	if (!found)
+	{
+		sel = (int)SendMessage(g_optResCombo, CB_ADDSTRING, 0, (LPARAM)curRes);
+	}
+
+	SendMessage(g_optResCombo, CB_SETCURSEL, sel, 0);
+	y += 32;
+
+
+    // Кнопка закрытия
+    HWND hClose = CreateWindowExA(
+        0, "BUTTON", "Закрыть",
+        WS_CHILD | WS_VISIBLE,
+        15, y, 100, 26,
+        g_optWnd, (HMENU)IDC_OPT_CLOSE, wc.hInstance, NULL
+    );
+    SendMessage(hClose, WM_SETFONT, (WPARAM)font, TRUE);
+
+    ShowWindow(g_optWnd, SW_SHOW);
+    UpdateWindow(g_optWnd);
+}
+
+
 //==============================================================================
 // 10. ОКНО И ГЛАВНЫЙ ЦИКЛ
 //==============================================================================
@@ -1704,10 +2420,15 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l)
     case WM_CLOSE: DestroyWindow(h); return 0;
     case WM_DESTROY: PostQuitMessage(0); return 0;
     case WM_SIZE: g_w=LOWORD(l); g_h=HIWORD(l); return 0;
-    case WM_KEYDOWN:
-        if (w<256) g_keys[w]=true;
-        if (w==VK_ESCAPE) UnlockMouse();
-        return 0;
+	case WM_KEYDOWN:
+	if (w < 256) g_keys[w] = true;
+
+	if (w == VK_ESCAPE) UnlockMouse();
+
+	// F1 открывает окно опций
+	if (w == VK_F1) CreateOptionsWindow();
+
+	return 0;
     case WM_KEYUP: if (w<256) g_keys[w]=false; return 0;
     case WM_LBUTTONDOWN: LockMouse(); return 0;
     case WM_MOUSEWHEEL:
@@ -1720,9 +2441,16 @@ static LRESULT CALLBACK WndProc(HWND h,UINT m,WPARAM w,LPARAM l)
     return DefWindowProcA(h,m,w,l);
 }
 
-int WINAPI wWinMain(HINSTANCE hInst,HINSTANCE,LPWSTR,int nCmdShow)
-{
-    WNDCLASSA wc={};
+	int WINAPI wWinMain(HINSTANCE hInst,HINSTANCE,LPWSTR,int nCmdShow)
+	{
+	// Инициализация стандартных Windows-контролов (trackbar и т.д.)
+	INITCOMMONCONTROLSEX icc;
+	icc.dwSize = sizeof(icc);
+	icc.dwICC = ICC_STANDARD_CLASSES | ICC_BAR_CLASSES;
+	InitCommonControlsEx(&icc);
+
+	WNDCLASSA wc={};
+	LoadOptions(); // Загружаем сохранённые опции
     wc.style=CS_HREDRAW|CS_VREDRAW|CS_OWNDC;
     wc.lpfnWndProc=WndProc; wc.hInstance=hInst;
 	wc.hCursor=LoadCursorA(NULL,(LPCSTR)IDC_ARROW);
@@ -1738,7 +2466,10 @@ int WINAPI wWinMain(HINSTANCE hInst,HINSTANCE,LPWSTR,int nCmdShow)
     ShowWindow(g_hwnd,nCmdShow); UpdateWindow(g_hwnd);
 
     if (!InitGL(g_hwnd))  return 1;
-    if (!InitScene())     return 1;
+	if (!InitScene())     return 1;
+
+
+	ApplyFullscreen();// Если в опциях сохранён полный экран, включаем его после инициализации
 
     LARGE_INTEGER freq,prev,now;
     QueryPerformanceFrequency(&freq); QueryPerformanceCounter(&prev);
@@ -1765,7 +2496,11 @@ int WINAPI wWinMain(HINSTANCE hInst,HINSTANCE,LPWSTR,int nCmdShow)
             frames=0; acc=0;
         }
     }
-    wglMakeCurrent(NULL,NULL);
-    if (g_hrc) wglDeleteContext(g_hrc);
-    return 0;
+	 // Возвращаем обычный режим монитора, если приложение было в fullscreen
+	 if (g_fsActive)
+		 ChangeDisplaySettingsA(NULL, 0);
+
+	 wglMakeCurrent(NULL,NULL);
+	 if (g_hrc) wglDeleteContext(g_hrc);
+	 return 0;
 }
