@@ -121,6 +121,8 @@ static void   (APIENTRY *glBeginQuery)(GLenum,GLuint);
 static void   (APIENTRY *glEndQuery)(GLenum);
 static void   (APIENTRY *glGetQueryObjectuiv)(GLuint,GLenum,GLuint*);
 
+static void   (APIENTRY *glDrawArraysInstanced)(GLenum,GLint,GLsizei,GLsizei);
+static void   (APIENTRY *glVertexAttribDivisor)(GLuint,GLuint);
 static void* GetGLProc(const char* n)
 {
     void* p = (void*)wglGetProcAddress(n);
@@ -146,7 +148,7 @@ static void LoadGL()
 	LOADGL(glFramebufferTexture2D); LOADGL(glCheckFramebufferStatus);
 	LOADGL(glUniform1f);
 	LOADGL(glUniform2f);
-	LOADGL(glUniform1i); LOADGL(glUniform3f); LOADGL(glUniformMatrix4fv);
+	LOADGL(glUniform1i); LOADGL(glUniform3f); LOADGL(glUniformMatrix4fv); LOADGL(glDrawArraysInstanced); LOADGL(glVertexAttribDivisor);
 }
 
 //==============================================================================
@@ -591,6 +593,56 @@ static const char* FS_SHADOW = R"glsl(
 out vec4 outColor;
 void main(){ outColor = vec4(0.0); })glsl";
 
+
+static const char* VS_RAIN = R"glsl(
+#version 330 core
+layout(location=0) in vec3 aCorner;
+layout(location=1) in vec4 aSeed;
+uniform mat4  uView, uProj;
+uniform vec3  uCamPos;
+uniform float uTime, uBoxSize, uStreakLen, uWidth;
+uniform vec2  uWind;
+out float vFade;
+void main(){
+    vec2 relXZ;
+    relXZ.x = mod(aSeed.x - uCamPos.x + uBoxSize*0.5, uBoxSize) - uBoxSize*0.5;
+    relXZ.y = mod(aSeed.y - uCamPos.z + uBoxSize*0.5, uBoxSize) - uBoxSize*0.5;
+    vec3 wp;
+    wp.x = uCamPos.x + relXZ.x;
+    wp.z = uCamPos.z + relXZ.y;
+    wp.x += uWind.x * uTime * 0.4;
+    wp.z += uWind.y * uTime * 0.4;
+    float speed   = 16.0 * aSeed.w;
+    float yRange  = uBoxSize * 1.6;
+    float fall    = mod(aSeed.z * yRange + uTime * speed, yRange);
+    wp.y = uCamPos.y + yRange * 0.75 - fall;
+    vec3 falling = normalize(vec3(uWind.x, -speed, uWind.y));
+    vec3 up      = -falling;
+    vec3 toCam = normalize(uCamPos - wp);
+    vec3 right = cross(up, toCam);
+    float rl = length(right);
+    right = (rl > 1e-4) ? right / rl : vec3(1.0, 0.0, 0.0);
+    float len = uStreakLen * (0.7 + 0.7 * aSeed.w);
+    vec3  pos = wp + up * (aCorner.y * len) + right * (aCorner.x * uWidth);
+    gl_Position = uProj * uView * vec4(pos, 1.0);
+    float d = length(pos - uCamPos);
+    float distFade = 1.0 - smoothstep(uBoxSize*0.30, uBoxSize*0.50, d);
+    float edgeFade = smoothstep(0.0, 0.15, aCorner.y);
+    vFade = distFade * edgeFade;
+}
+)glsl";
+
+static const char* FS_RAIN = R"glsl(
+#version 330 core
+in float vFade;
+uniform float uIntensity;
+out vec4 outColor;
+void main(){
+    vec3 col = vec3(0.70, 0.78, 0.92);
+    float a = vFade * uIntensity;
+    outColor = vec4(col, a * 0.65);
+}
+)glsl";
 static const char* VS_SKY = R"glsl(
 #version 330 core
 layout(location=0) in vec2 aPos;
@@ -797,6 +849,12 @@ static float g_adapt=0.0f;   // накопленная засветка (адаптация глаз)
 static GLuint progGlare, progDim;
 static struct { GLint sunUV,intensity,aspect; } UG;
 static struct { GLint dim; } UDim;
+static GLuint g_rainVAO = 0, g_rainVBO = 0, g_rainInstVBO = 0;
+static const int RAIN_DROPS = 6000;
+
+struct {
+    GLint view, proj, cam, time, intensity, boxSize, streakLen, width, wind;
+} UR3;
 static GLuint g_shadowFBO,g_shadowTex,g_skyVAO,g_skyVBO;
 static const int SHADOW_RES=4096;
 static struct { GLint model,view,proj,lightVP,color,keyDir,keyCol,fillDir,fillCol,cam,shadow,pattern,dayF,fogCol,lakeC,lakeR,duskF,cloudOff,sunXZY,cloudSh,overcast; } U;
@@ -1055,6 +1113,50 @@ static bool InitScene()
     glBindFramebuffer(GL_FRAMEBUFFER,0);
 
 	BuildWorld();
+
+    // ---- Р”РѕР¶РґСЊ: instanced-РјРµС€ ----
+    {
+        float quad[18] = {
+            -1.0f, 0.0f, 0.0f,
+             1.0f, 0.0f, 0.0f,
+            -1.0f, 1.0f, 0.0f,
+             1.0f, 0.0f, 0.0f,
+             1.0f, 1.0f, 0.0f,
+            -1.0f, 1.0f, 0.0f
+        };
+        glGenVertexArrays(1, &g_rainVAO);
+        glBindVertexArray(g_rainVAO);
+        glGenBuffers(1, &g_rainVBO);
+        glBindBuffer(GL_ARRAY_BUFFER, g_rainVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        float* inst = new float[RAIN_DROPS * 4];
+        for (int i = 0; i < RAIN_DROPS; i++) {
+            inst[i*4+0] = Rnd() * 1000.0f;
+            inst[i*4+1] = Rnd() * 1000.0f;
+            inst[i*4+2] = Rnd();
+            inst[i*4+3] = 0.7f + Rnd() * 0.7f;
+        }
+        glGenBuffers(1, &g_rainInstVBO);
+        glBindBuffer(GL_ARRAY_BUFFER, g_rainInstVBO);
+        glBufferData(GL_ARRAY_BUFFER, RAIN_DROPS*4*sizeof(float), inst, GL_STATIC_DRAW);
+        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 4*sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribDivisor(1, 1);
+        delete[] inst;
+        glBindVertexArray(0);
+        GLuint progRain = LinkProgram(VS_RAIN, FS_RAIN);
+        UR3.view      = glGetUniformLocation(progRain, "uView");
+        UR3.proj      = glGetUniformLocation(progRain, "uProj");
+        UR3.cam       = glGetUniformLocation(progRain, "uCamPos");
+        UR3.time      = glGetUniformLocation(progRain, "uTime");
+        UR3.intensity = glGetUniformLocation(progRain, "uIntensity");
+        UR3.boxSize   = glGetUniformLocation(progRain, "uBoxSize");
+        UR3.streakLen = glGetUniformLocation(progRain, "uStreakLen");
+        UR3.width     = glGetUniformLocation(progRain, "uWidth");
+        UR3.wind      = glGetUniformLocation(progRain, "uWind");
+    }
 
     glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LESS);
     glEnable(GL_CULL_FACE); glCullFace(GL_BACK); glFrontFace(GL_CCW);
@@ -1436,6 +1538,34 @@ static void Render()
 	glUniform1f(UW.lakeR,g_lakeR);
 	DrawMesh(g_grid);
 	glDepthMask(GL_TRUE);
+
+        // ---- Р”РѕР¶РґСЊ ----
+        if (g_overcastU > 0.3f){
+            float rainIntensity = (g_overcastU - 0.3f) / 0.7f;
+            if (rainIntensity > 1.0f) rainIntensity = 1.0f;
+            glEnable(GL_DEPTH_TEST);
+            glDepthMask(GL_FALSE);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            static GLuint progRain = 0;
+            if (progRain == 0) progRain = LinkProgram(VS_RAIN, FS_RAIN);
+            glUseProgram(progRain);
+            glUniformMatrix4fv(UR3.view, 1, GL_FALSE, view.m);
+            glUniformMatrix4fv(UR3.proj, 1, GL_FALSE, proj.m);
+            glUniform3f(UR3.cam, g_camPos.x, g_camPos.y, g_camPos.z);
+            glUniform1f(UR3.time, g_time);
+            glUniform1f(UR3.intensity, rainIntensity);
+            glUniform1f(UR3.boxSize, 38.0f);
+            glUniform1f(UR3.streakLen, 0.85f);
+            glUniform1f(UR3.width, 0.014f);
+            float wx = 2.2f, wz = 0.6f;
+            glUniform2f(UR3.wind, wx, wz);
+            glBindVertexArray(g_rainVAO);
+            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, RAIN_DROPS);
+            glBindVertexArray(0);
+            glDisable(GL_BLEND);
+            glDepthMask(GL_TRUE);
+        }
 	glDisable(GL_BLEND);
 
 													 // ---- Ослепление солнцем ----
